@@ -68,6 +68,7 @@ void uart2_init(unsigned baudrate) {
     SET_S2REN;                    			    // set S2REN to enable reception
     SET_S2TI;                                   // set S2TI to enable transmit
     CLR_S2RI;                                   // clear S2RI 
+    RTS = 0;                                    // clear RTS to allow transmissions from remote console
     SET_ES2;                    			    // set ES2 to enable UART3 serial interrupt
     EA = TRUE;                     				// enable global interrupt
 }                   

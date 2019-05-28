@@ -1,5 +1,6 @@
 //------------------------------------------------------------------------------------------
-// Print characters received from the serial port on the Wheelwriter.
+// Uses an STCmicro STC15W4K32S4 series micro controller to turn an IBM Wheelwriter Electronic
+// Typewriter into a teletype-like device.
 //
 // switch 1    off - linefeed only upon receipt of linefeed character (0x0A)
 //             on  - auto linefeed; linefeed is performed with each carriage return (0x0D)

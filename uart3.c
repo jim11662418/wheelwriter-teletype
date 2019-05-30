@@ -70,9 +70,9 @@ void uart3_init(void) {
 }   
 
 // ---------------------------------------------------------------------------
-// sends Acknowledge (all zeros)
+// sends Acknowledge (all zeros) to the Function Board
 // ---------------------------------------------------------------------------
-void uart3_send_ACK(void) {
+void send_ACK_to_function_board(void) {
    while (!tx3_ready);		 					// wait until transmit buffer is empty
    tx3_ready = 0;                               // clear flag   
    while(!WWbus3);                              // wait until the Wheelwriter bus goes high
@@ -86,9 +86,9 @@ void uart3_send_ACK(void) {
 
 // ---------------------------------------------------------------------------
 // sends an unsigned integer as 11 bits (start bit, 9 data bits, stop bit)
-// does not wait for acknowledge
+// to the Function Board. does not wait for acknowledge
 // ---------------------------------------------------------------------------
-void uart3_send(unsigned int wwCommand) {
+void send_to_function_board(unsigned int wwCommand) {
    while (!tx3_ready);		 					// wait until transmit buffer is empty
    tx3_ready = 0;                               // clear flag   
    while(!WWbus3);                              // wait until the Wheelwriter bus goes high
@@ -103,7 +103,7 @@ void uart3_send(unsigned int wwCommand) {
 // ---------------------------------------------------------------------------
 // returns 1 if there is an unsigned integer from the Function Board waiting in the UART3 receive buffer.
 // ---------------------------------------------------------------------------
-char uart3_avail(void) {
+char function_board_cmd_avail(void) {
    return (rx3_head != rx3_tail);               // not equal means there's something in the buffer
 }
 
@@ -111,7 +111,7 @@ char uart3_avail(void) {
 // returns the next unsigned integer from the Function Board in the UART3 receive buffer.
 // waits for an integer to become available if necessary.
 //----------------------------------------------------------------------------
-unsigned int uart3_get_data(void) {
+unsigned int get_function_board_cmd(void) {
     unsigned int buf;
 
     while (rx3_head == rx3_tail);     			// wait until a word is available

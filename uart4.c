@@ -64,26 +64,10 @@ void uart4_init(void) {
 }
 
 // ---------------------------------------------------------------------------
-// sends Acknowledge (all zeros) from the 
-// ---------------------------------------------------------------------------
-void uart4_send_ACK(void) {
-   while (!tx4_ready);		 					// wait until transmit buffer is empty
-   tx4_ready = 0;                               // clear flag   
-   while(!WWbus4);                              // wait until the Wheelwriter bus goes high
-   CLR_S4REN;                                   // clear S4REN to disable reception
-   CLR_S4TB8;
-   S4BUF = 0x00;                                // lower 8 bits
-   while(!tx4_ready);                           // wait until finished transmitting
-
-   while(!WWbus4);                              // wait until the Wheelwriter bus goes high
-   SET_S4REN;                    		        // set S4REN to re-enable reception
-}
-
-// ---------------------------------------------------------------------------
 // sends an unsigned integer as 11 bits (start bit, 9 data bits, stop bit)
-// waits for acknowledge from printer board.
+// to the Printer Board. waits for acknowledge from printer board.
 // ---------------------------------------------------------------------------
-void uart4_send_wait(unsigned int wwCommand) {
+void send_to_printer_board_wait(unsigned int wwCommand) {
    while (!tx4_ready);		 					// wait until transmit buffer is empty
    tx4_ready = 0;                               // clear flag   
    while(!WWbus4);                              // wait until the Wheelwriter bus goes high
@@ -99,9 +83,9 @@ void uart4_send_wait(unsigned int wwCommand) {
 
 // ---------------------------------------------------------------------------
 // sends an unsigned integer as 11 bits (start bit, 9 data bits, stop bit)
-// does not wait for acknowledge from printer board.
+// to the Printer Board. does not wait for acknowledge from printer board.
 // ---------------------------------------------------------------------------
-void uart4_send(unsigned int wwCommand) {
+void send_to_printer_board(unsigned int wwCommand) {
    while (!tx4_ready);		 					// wait until transmit buffer is empty
    tx4_ready = 0;                               // clear flag   
    while(!WWbus4);                              // wait until the Wheelwriter bus goes high
@@ -116,7 +100,7 @@ void uart4_send(unsigned int wwCommand) {
 // ---------------------------------------------------------------------------
 // returns 1 if there is an unsigned integer from the Printer Board waiting in the UART4 receive buffer.
 // ---------------------------------------------------------------------------
-char uart4_avail(void) {
+char printer_board_reply_avail(void) {
    return (rx4_head != rx4_tail);               // not equal means there's something in the buffer
 }
 
@@ -124,7 +108,7 @@ char uart4_avail(void) {
 // returns the next unsigned integer from the Printer Board in the UART4 receive buffer.
 // waits for an integer to become available if necessary.
 //----------------------------------------------------------------------------
-unsigned int uart4_get_data(void) {
+unsigned int get_printer_board_reply(void) {
     unsigned int buf;
 
     while (rx4_head == rx4_tail);     			// wait until a word is available

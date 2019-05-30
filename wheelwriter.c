@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <reg51.h>
 #include <stc51.h>
 #include "uart2.h"
@@ -65,20 +66,20 @@ code const char printwheel2ASCII[96] = {
 
 // backspace, no erase. decreases micro space count by uSpacesPerChar.
 void ww_backspace(void) {                        
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x006);                      // move the carrier horizontally
-    uart4_send_wait(0x000);                      // bit 7 is cleared for right to left direction
-    uart4_send_wait(uSpacesPerChar);    
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x006);                      // move the carrier horizontally
+    send_to_printer_board_wait(0x000);                      // bit 7 is cleared for right to left direction
+    send_to_printer_board_wait(uSpacesPerChar);    
     uSpaceCount -= uSpacesPerChar;
 }
 
 // backspace 1/120 inch. decrements micro space count
 void ww_micro_backspace(void) {
     if (uSpaceCount){                       // only if the carrier is not at the left margin
-        uart4_send_wait(0x121);
-        uart4_send_wait(0x006);                  // move the carrier horizontally
-        uart4_send_wait(0x000);                  // bit 7 is cleared for right to left direction
-        uart4_send_wait(0x001);                  // one microspace
+        send_to_printer_board_wait(0x121);
+        send_to_printer_board_wait(0x006);                  // move the carrier horizontally
+        send_to_printer_board_wait(0x000);                  // bit 7 is cleared for right to left direction
+        send_to_printer_board_wait(0x001);                  // one microspace
         --uSpaceCount;
     }
 }
@@ -89,17 +90,17 @@ void ww_micro_backspace(void) {
 // word. Bit 7 of the 3rd word is cleared to indicate carriage movement left direction.
 // resets micro space count back to zero.
 void ww_carriage_return(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x006);                     // move the carrier horizontallly
-    uart4_send_wait((uSpaceCount>>8)&0x007);    // bit 7 is cleared for right to left direction, bits 0-2 = upper 3 bits of micro spaces to left margin
-    uart4_send_wait(uSpaceCount&0xFF);          // lower 8 bits of micro spaces to left margin
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x006);                     // move the carrier horizontallly
+    send_to_printer_board_wait((uSpaceCount>>8)&0x007);    // bit 7 is cleared for right to left direction, bits 0-2 = upper 3 bits of micro spaces to left margin
+    send_to_printer_board_wait(uSpaceCount&0xFF);          // lower 8 bits of micro spaces to left margin
     uSpaceCount = 0;                            // clear count
 }
 
 // ww_spins the printwheel as a visual and audible indication
 void ww_spin(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x007);
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x007);
 }
 
 // horizontal tab number of "spaces". updates micro space count.
@@ -107,67 +108,67 @@ void ww_horizontal_tab(unsigned char spaces) {
     unsigned int s;
 
     s = spaces*uSpacesPerChar;              // number of microspaces to move right
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x006);                     // move the carrier horizontally
-    uart4_send_wait(((s>>8)&0x007)|0x80);       // bit 7 is set for left to right direction, bits 0-2 = upper 3 bits of micro spaces to move right
-    uart4_send_wait(s&0xFF);                    // lower 8 bits of micro spaces to move right
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x006);                     // move the carrier horizontally
+    send_to_printer_board_wait(((s>>8)&0x007)|0x80);       // bit 7 is set for left to right direction, bits 0-2 = upper 3 bits of micro spaces to move right
+    send_to_printer_board_wait(s&0xFF);                    // lower 8 bits of micro spaces to move right
     uSpaceCount += s;                       // update micro space count
 }
 
 // backspaces and erases "letter". updates micro space count.
 // Note: erasing bold or underlined characters or characters on lines other than the current line not implemented yet.
 void ww_erase_letter(unsigned char letter) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x006);                     // move the carrier horizontally
-    uart4_send_wait(0x000);                     // bit 7 is cleared for right to left direction
-    uart4_send_wait(uSpacesPerChar);            // number of micro spaces to move left    
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x004);                     // print on correction tape
-    uart4_send_wait(ASCII2printwheel[letter-0x20]);
-    uart4_send_wait(uSpacesPerChar);            // number of micro spaces to move right
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x006);                     // move the carrier horizontally
+    send_to_printer_board_wait(0x000);                     // bit 7 is cleared for right to left direction
+    send_to_printer_board_wait(uSpacesPerChar);            // number of micro spaces to move left    
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x004);                     // print on correction tape
+    send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);
+    send_to_printer_board_wait(uSpacesPerChar);            // number of micro spaces to move right
     uSpaceCount -= uSpacesPerChar;          // update the micro space count
 }
 
 // paper up one line
 void ww_linefeed(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x080|uLinesPerLine);       // bit 7 is set to indicate paper up direction, bits 0-4 indicate number of microlines for 1 full line
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x080|uLinesPerLine);       // bit 7 is set to indicate paper up direction, bits 0-4 indicate number of microlines for 1 full line
 }    
 
 // paper down one line
 void ww_reverse_linefeed(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x000|uLinesPerLine);       // bit 7 is cleared to indicate paper down direction, bits 0-4 indicate number of microlines for 1 full line
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x000|uLinesPerLine);       // bit 7 is cleared to indicate paper down direction, bits 0-4 indicate number of microlines for 1 full line
 }    
 
 // paper up 1/2 line
 void ww_paper_up(void) {                    
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x080|(uLinesPerLine>>1));  // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/2 line
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x080|(uLinesPerLine>>1));  // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/2 line
 }
 
 // paper down 1/2 line
 void ww_paper_down(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x000|(uLinesPerLine>>1));  // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/2 full line
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x000|(uLinesPerLine>>1));  // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/2 full line
 }
 
 // paper up 1/8 line
 void ww_micro_up(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x080|(uLinesPerLine>>3));  // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x080|(uLinesPerLine>>3));  // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
 }
 
 // paper down 1/8 line
 void ww_micro_down(void) {
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x005);                     // vertical movement
-    uart4_send_wait(0x000|(uLinesPerLine>>3));  // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x005);                     // vertical movement
+    send_to_printer_board_wait(0x000|(uLinesPerLine>>3));  // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
 }
 
 //-----------------------------------------------------------
@@ -178,24 +179,24 @@ void ww_micro_down(void) {
 //-----------------------------------------------------------
 void ww_print_letter(unsigned char letter,attribute) {
     amberLED = ON;
-    uart4_send_wait(0x121);
-    uart4_send_wait(0x003);
-    uart4_send_wait(ASCII2printwheel[letter-0x20]);   // ascii character (-0x20) as index to printwheel table    
+    send_to_printer_board_wait(0x121);
+    send_to_printer_board_wait(0x003);
+    send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);   // ascii character (-0x20) as index to printwheel table    
     if ((attribute & 0x06) && ((letter!=0x20) || (attribute & 0x02))){// if underlining AND the letter is not a space OR continuous underlining is on
-        uart4_send_wait(0x000);                 // advance zero micro spaces
-        uart4_send_wait(0x121);
-        uart4_send_wait(0x003);
-        uart4_send_wait(0x04F);                 // print '_' underscore
+        send_to_printer_board_wait(0x000);                 // advance zero micro spaces
+        send_to_printer_board_wait(0x121);
+        send_to_printer_board_wait(0x003);
+        send_to_printer_board_wait(0x04F);                 // print '_' underscore
     }
     if (attribute & 0x01) {                 // if the bold bit is set   
-        uart4_send_wait(0x001);                 // advance carriage by one micro space
-        uart4_send_wait(0x121);
-        uart4_send_wait(0x003);
-        uart4_send_wait(ASCII2printwheel[letter-0x20]);// re-print the character offset by one micro space
-        uart4_send_wait((uSpacesPerChar)-1);    // advance carriage the remaining micro spaces
+        send_to_printer_board_wait(0x001);                 // advance carriage by one micro space
+        send_to_printer_board_wait(0x121);
+        send_to_printer_board_wait(0x003);
+        send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);// re-print the character offset by one micro space
+        send_to_printer_board_wait((uSpacesPerChar)-1);    // advance carriage the remaining micro spaces
     } 
     else { // not boldprint
-        uart4_send_wait(uSpacesPerChar);      
+        send_to_printer_board_wait(uSpacesPerChar);      
     }
     uSpaceCount += uSpacesPerChar;          // update the micro space count
     if (uSpaceCount > 1319) {               // 1 inch from right stop   
@@ -233,36 +234,39 @@ void ww_set_printwheel(unsigned char pw) {
 // and returns the decoded ASCII character. 
 //------------------------------------------------------------------------------------------
 char ww_decode_keys(unsigned int WWdata) {
-    static char state = 0;
+    static char keystate = 0;
     char result;
 
     result = 0;
-    switch (state) {
+    switch (keystate) {
         case 0:                     // waiting for first data word from Wheelwriter...
             if (WWdata == 0x121)    // all commands must start with 0x121...
-               state = 1;
+               keystate = 1;
             break;
         case 1:                     // 0x121 has been received...
             switch (WWdata) {
                 case 0x003:         // 0x121,0x003 is start of alpha-numeric character sequence
-                    state = 2;
+                    keystate = 2;
                     break;
                 case 0x004:         // 0x121,0x004 is start of erase sequence
-                    state = 0;
+                    keystate = 0;
                     result = BS;   
                     break;
                 case 0x005:         // 0x121,0x005 is start of vertical movement sequence
-                    state = 6;
+                    keystate = 6;
                     break;          
                 case 0x006:         // 0x121,0x006 is start of horizontal movement sequence
-                    state = 3;
+                    keystate = 3;
+                    break;
+                case 0x00E:         // 0x121,0x00E is the start of a code key sequence
+                    keystate = 7;
                     break;
                 default:
-                    state = 0;
+                    keystate = 0;
         } // switch (WWdata)
             break;
         case 2:                     // 0x121,0x003 has been received...          
-            state = 0;
+            keystate = 0;
             if (WWdata)             // 0x121,0x003,printwheel code
                result = printwheel2ASCII[(WWdata-1)&0x5F]; 
             else
@@ -270,12 +274,12 @@ char ww_decode_keys(unsigned int WWdata) {
             break;
         case 3:                     // 0x121,0x006 has been received...
             if (WWdata & 0x080)     // if bit 7 is set...         
-               state = 4;           // 0x121,0x006,0x080 is horizontal movement to the right...
+               keystate = 4;        // 0x121,0x006,0x080 is horizontal movement to the right...
             else                    // else...
-               state = 5;           // 0x121,0x006,0x000 is horizontal movement to the left...
+               keystate = 5;        // 0x121,0x006,0x000 is horizontal movement to the left...
             break;
         case 4:                     // 0x121,0x006,0x080 has been received, move carrier to the right...
-            state = 0;
+            keystate = 0;
             if (WWdata>uSpacesPerChar) { // if more than one space, must be horizontal tab
                 result = HT;
             }
@@ -284,15 +288,97 @@ char ww_decode_keys(unsigned int WWdata) {
             }
             break;
         case 5:                     // 0x121,0x006,0x000 has been received, move carrier to the left...
-            state = 0;
+            keystate = 0;
             if (WWdata == uSpacesPerChar) 
                result = BS;
             break;
         case 6:                     // 0x121,0x005 has been received...
-            state = 0;
+            keystate = 0;
             if ((WWdata&0x1F) == uLinesPerLine)
                result = CR;        // 0x121,0x005,0x090 is the sequence for paper up one line (for 10P, 12P and PS printwheels)
-    }   // switch (state)
+            break;
+        case 7:                     // 0x121,0x00E has ben received (code key combination)
+            keystate = 0;
+            // convert code key combinations into control keys i.e. code c is converted into control c
+            switch(WWdata & 0x17F) { // bit 7 is set when the caps lock is on or the shift key is used. clear bit 7 to convert to lower case
+                case 0x002:	        // Code q
+                    result = 0x11;
+                    break;
+                case 0x004:	        // Code a
+                    result = 0x01;
+                    break;
+                case 0x006:	        // Code z
+                    result = 0x1A;
+                    break;
+                case 0x00A:	        // Code w
+                    result = 0x17;
+                    break;
+                case 0x00C:	        // Code s
+                    result = 0x13;
+                    break;
+                case 0x00E:	        // Code x
+                    result = 0x18;
+                    break;
+                case 0x012:	        // Code e
+                    result = 0x05;
+                    break;
+                case 0x014:	        // Code d
+                    result = 0x04;
+                    break;
+                case 0x016:	        // Code c
+                    result = 0x03;
+                    break;
+                case 0x01A:	        // Code r
+                    result = 0x12;
+                    break;
+                case 0x01B:	        // Code t
+                    result = 0x14;
+                    break;
+                case 0x01C:	        // Code f
+                    result = 0x06;
+                    break;
+                case 0x01D:	        // Code g
+                    result = 0x07;
+                    break;
+                case 0x01E:	        // Code v
+                    result = 0x16;
+                    break;
+                case 0x01F:	        // Code b
+                    result = 0x02;
+                    break;
+                case 0x022:	        // Code u
+                    result = 0x15;
+                    break;
+                case 0x023:	        // Code y
+                    result = 0x19;
+                    break;
+                case 0x024:	        // Code j
+                    result = 0x0A;
+                    break;
+                case 0x025:	        // Code h
+                    result = 0x08;
+                    break;
+                case 0x026:	        // Code m
+                    result = 0x0D;
+                    break;
+                case 0x02A:	        // Code i
+                    result = 0x09;
+                    break;
+                case 0x02C:	        // Code k
+                    result = 0x0B;
+                    break;
+                case 0x032:	        // Code o
+                    result = 0x0F;
+                    break;
+                case 0x03A:	        // Code p
+                    result = 0x10;
+                    break;
+                case 0x072:	        // Code n
+                    result = 0x0E;
+                    break;
+            } // switch(WWdata & 0x17F)
+            break;
+    }   // switch (keystate)
     return(result);
 }
 

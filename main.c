@@ -7,6 +7,7 @@
 // Version 1.0.0 - Initial version
 // Version 1.1.0 - Changes necessary to make it work with both Wheelwriter 3 and 6
 // Version 1.1.1 - Renamed some function and variables for added readability
+// Version 1.2.0 - Watch Dog Timer added
 //
 //------------------------------------------------------------------------------------------
 
@@ -49,7 +50,8 @@ sbit greenLED = P0^7;                   // green LED connected to pin 8 0=on, 1=
 bit autoLinefeed = FALSE;               // when true, automatically print a linefeed with each carriage return
 bit typewriter = TRUE;                  // when true wheelwriter keystrokes go to wheelwriter, when false wheelwriter keystrokes go to serial console
 bit errorLED = FALSE;                   // makes the red LED flash when TRUE
-unsigned char wheelwriterModel = 0;
+bit initializing = TRUE;                // makes all three LEDs flash during initialization    
+unsigned char wheelwriterModel = 0;     // 0x006 = model 3, 0x025 = model 5, 0x026 = model 6
 unsigned char attribute = 0;            // bit 0=bold, bit 1=continuous underline, bit 2=multiple word underline
 unsigned char column = 1;               // current print column (1=left margin)
 unsigned char tabStop = 5;              // horizontal tabs every 5 spaces (every 1/2 inch)
@@ -58,7 +60,10 @@ volatile unsigned char hours = 0;       // uptime hours
 volatile unsigned char minutes = 0;     // uptime minutes
 volatile unsigned char seconds = 0;     // uptime seconds
 
-code char title[]     = "Wheelwriter Teletype Version 1.1.1";
+// uninitialized variables in xdata RAM, contents unaffected by reset
+unsigned char xdata wdResets _at_ 0x3F0;// count of watchdog resets
+
+code char title[]     = "Wheelwriter Teletype Version 1.2.0";
 code char mcu[]       = "STCmicro IAP15W4K61S4 MCU";
 code char compiled[]  = "Compiled on " __DATE__ " at " __TIME__;
 code char copyright[] = "Copyright 2019 Jim Loos";
@@ -73,13 +78,16 @@ void timer0_isr(void) interrupt 1 using 1{
         --timeout;
     }
 
+    if (initializing) {             // flash all three LEDs while initializing
+       amberLED = greenLED = redLED = (ticks < 10);
+    }
+    
+    if (errorLED) {                 // flash red LED if error
+        redLED = (ticks < 10);
+    }
+
     if(++ticks == 20) { 		    // if 20 ticks (one second) have elapsed...
         ticks = 0;
-
-        if (errorLED) {             // if there's an error 
-           redLED = !redLED;        // toggle the red LED once each second
-        }
-
         if (++seconds == 60) {		// if 60 seconds (one minute) has elapsed...
             seconds = 0;
             if (++minutes == 60) {	// if 60 minutes (one hour) has elapsed...
@@ -130,7 +138,6 @@ void timer0_isr(void) interrupt 1 using 1{
 // <ESC><^Z><e><n> turn flashing red error LED on or off (n=1 is on, n=0 is off)
 // <ESC><^Z><p><n> print (on the serial console) the value of Port n (0-5) as 2 digit hex number
 // <ESC><^Z><r> reset both the MCU and the wheelwriter
-// <ESC><^Z><t> print (on the serial console) the state of the typewriter/keyboard flag
 // <ESC><^Z><u> print (on the serial console) the uptime as HH:MM:SS
 // <ESC><^Z><w> print (on the serial console) the number of watchdog resets
 //-------------------------------------------------------------------------------------------
@@ -138,9 +145,9 @@ void print_char_on_WW(unsigned char charToPrint) {
     static char escape = 0;                                 // escape sequence state
     char i,t;
 
-    switch (escape) {
+    switch(escape) {
         case 0:
-            switch (charToPrint) {
+            switch(charToPrint) {
                 case NUL:
                     break;
                 case BEL:
@@ -185,55 +192,45 @@ void print_char_on_WW(unsigned char charToPrint) {
                     ww_print_letter(charToPrint,attribute);
                     putchar(charToPrint);                   // echo the character to the console
                     ++column;                               // update column
-            } // switch (charToPrint)
+            } // switch(charToPrint)
 
             break;  // case 0:
-        case 1:                                             // this is the second character of the escape sequence...
-            switch (charToPrint) {
+        case 1:         
+            escape = 0;                                    // this is the second character of the escape sequence...
+            switch(charToPrint) {
                 case 'O':                                   // <ESC><O> selects bold printing
                     attribute |= 0x01;
-                    escape = 0;
                     break;
                 case '&':                                   // <ESC><&> cancels bold printing
                     attribute &= 0x06;
-                    escape = 0;
                     break;
                 case 'E':                                   // <ESC><E> selects continuous underline (spaces between words are underlined)
                     attribute |= 0x02;
-                    escape = 0;
                     break;
                 case 'R':                                   // <ESC><R> cancels underlining
                     attribute &= 0x01;
-                    escape = 0;
                     break;
                 case 'X':                                   // <ESC><X> cancels both bold and underlining
                     attribute = 0;
-                    escape = 0;
                     break;                
                 case 'U':                                   // <ESC><U> selects half line feed (paper up one half line)
                     ww_paper_up();
-                    escape = 0;
                     break;
                 case 'D':                                   // <ESC><D> selects reverse half line feed (paper down one half line)
                     ww_paper_down();
-                    escape = 0;
                     break;
                 case LF:                                    // <ESC><LF> selects reverse line feed (paper down one line)
                     ww_reverse_linefeed();
-                    escape = 0;
                     break;
                 case BS:                                    // <ESC><BS> backspace 1/120 inch
                     ww_micro_backspace();
-                    escape = 0;
                     break;
                 case 'b':                                   // <ESC><b> selects broken underline (spaces between words are not underlined)
                     attribute |= 0x04;
-                    escape = 0;
                     break;
                 case 'e':                                   // <ESC><e> selects Elite (12 characters/inch)
                     ww_set_printwheel(TWELVECPI);           // 10 micro spaces/character, 16 micro lines/line
-                    tabStop =6;                             // tab stops every 6 characters (every 1/2 inch)
-                    escape = 0;
+                    tabStop = 6;                            // tab stops every 6 characters (every 1/2 inch)
                     break;
                 case 'l':                                   // <ESC><l> selects auto linefeed, the next character turns it on or off
                     escape = 5;
@@ -241,31 +238,27 @@ void print_char_on_WW(unsigned char charToPrint) {
                 case 'p':                                   // <ESC><p> selects Pica (10 characters/inch)
                     ww_set_printwheel(TENCPI);              // 12 micro spaces/character, 16 micro lines/line
                     tabStop =5;                             // tab stops every 5 characters (every 1/2 inch)
-                    escape = 0;
                     break;
                 case 'm':                                   // <ESC><m> selects Micro Elite (15 characters/inch)
                     ww_set_printwheel(FIFTEENCPI);          // 8 micro spaces/character, 12 micro lines/line
                     tabStop =7;                             // tab stops every 7 characters (every 1/2 inch)
-                    escape = 0;
                     break;
                 case 'u':                                   // <ESC><u> paper micro up (paper up 1/8 line)
                     ww_micro_up();
-                    escape = 0;
                     break;
                 case 'd':                                   // <ESC><d> paper micro down (paper down 1/8 line)
                     ww_micro_down();
-                    escape = 0;
                     break;
                 case '\x1A':                                // <ESC><^Z> for remote diagnostics
                     escape = 2;
                     break;  
-            } // switch (charToPrint)
+            } // switch(charToPrint)
             break;  // case 1:
         case 2:                                             // this is the third character of the escape sequence...
-            switch (charToPrint) {
+            escape = 0;
+            switch(charToPrint) {
                 case 'c':                                   // <ESC><^Z><c> print current column
                     printf("%s %u\n","Column:",(int)column);
-                    escape = 0;
                     break;
                 case 'e':                                   // <ESC><^Z><e> controls the red error LED. the next character turn is on or off
                     escape = 4;
@@ -274,53 +267,44 @@ void print_char_on_WW(unsigned char charToPrint) {
                     escape = 3;
                     break;
                 case 'r':                                   // <ESC><^Z><r> reset the MCU and the Wheelwriter
-                    escape = 0;
                     IAP_CONTR = 0x20;
                     break; 
-                case 't':                                   // <ESC><^Z><t> print "typewriter/keyboard" flag
-                    printf("Wheelwriter key strokes go to ");
-                    if (typewriter) printf("Wheelwriter.\n"); else printf("serial console.\n");
-                    escape = 0;
+                case 't': 
                     break;
                 case 'u':                                   // <ESC><^Z><u> print uptime
                     printf("%s %02u%c%02u%c%02u\n","Uptime:",(int)hours,':',(int)minutes,':',(int)seconds);
-                    escape = 0;
                     break; 
                 case 'w':                                   // <ESC><^Z><w> print watchdog resets
-                    escape = 0;
+                    printf("%s %d\n","Watch Dog Timer resets:",(int)wdResets);
                     break;
-            } // switch (charToPrint)
+            } // switch(charToPrint)
             break;  // case 2:
         case 3:                                             // this is the fourth character of the escape sequence
-            switch (charToPrint){
+            escape = 0;
+            switch(charToPrint){
                 case '0':
                     printf("%s 0x%02X\n","P0:",(int)P0);    // <ESC><^Z><p><0> print port 0 value
-                    escape = 0;
                     break;
                 case '1':
                     printf("%s 0x%02X\n","P1:",(int)P1);    // <ESC><^Z><p><1> print port 1 value
-                    escape = 0;
                     break;
                 case '2':
                     printf("%s 0x%02X\n","P2:",(int)P2);    // <ESC><^Z><p><2> print port 2 value
-                    escape = 0;
                     break;
                 case '3':
                     printf("%s 0x%02X\n","P3:",(int)P3);    // <ESC><^Z><p><3> print port 3 value
-                    escape = 0;
                     break;
                 case '4':
                     printf("%s 0x%02X\n","P4:",(int)P4);    // <ESC><^Z><p><3> print port 4 value
-                    escape = 0;
                     break;
                 case '5':
                     printf("%s 0x%02X\n","P5:",(int)P5);    // <ESC><^Z><p><3> print port 5 value
-                    escape = 0;
                     break;
 
-            } // switch (charToPrint)
+            } // switch(charToPrint)
             break;  // case 3:
         case 4:
+            escape = 0;
             if (charToPrint & 0x01) {
                 errorLED = TRUE;                            // <ESC><^Z><e><n> odd values of n turn the LED on, even values turn the LED off
             }
@@ -328,18 +312,15 @@ void print_char_on_WW(unsigned char charToPrint) {
                 errorLED = FALSE;
                 redLED = OFF;                               // turn off the red LED
             }
-            escape = 0;
             break;  // case 4
         case 5:
-            if (charToPrint & 0x01) {
-                autoLinefeed = TRUE;                        // <ESC><l><n> odd values of n turn autoLinefeed on, even values turn autoLinefeed off
-            }
-            else {
-                autoLinefeed = FALSE;
-            }
             escape = 0;
+            if (charToPrint & 0x01)
+                autoLinefeed = TRUE;                        // <ESC><l><n> odd values of n turn autoLinefeed on, even values turn autoLinefeed off
+            else
+                autoLinefeed = FALSE;
             break; // case 5
-    } // switch (escape)
+    } // switch(escape)
 }
 
 
@@ -365,16 +346,15 @@ void main(void){
 	unsigned int loopcounter,function_board_cmd,printer_board_reply;
     unsigned char pitch = 0;
     unsigned char state = 0;
-    char c;
+    char c,lasttime;
 
-    P0M1 = 0;                                                   // required to make port 0 work
+    // After power-up, all PWM-related I/O ports are in high impedance state. These ports
+    // need to be set to quasi-bidirectional or strong push-pull mode for normal use.
+    // Affected ports: P0.6,P0.7,P1.6,P1.7,P2.1,P2.2,P2.3,P2.7,P3.7,P4.2,P4.4,P4.5
+    P0M1 = 0;                                                   // set P0 to quasi-bidirectional
     P0M0 = 0;
 
-    POR = 1;                                                    // Power-On-Reset on
-
-    amberLED = OFF;                                             // turn off the amber LED
-    greenLED = OFF;                                             // turn off the green LED
-    redLED = OFF;                                               // turn off the red LED
+    POR = 1;                                                    // Power-On-Reset to Wheelwriter
 
 	TL0 = RELOADLO;                         	                // load timer 0 low byte
 	TH0 = RELOADHI;              	                            // load timer 0 high byte
@@ -389,19 +369,38 @@ void main(void){
 	EA = TRUE;                     	                            // global interrupt enable
 
     printf("\n%s\n%s\n%s\n%s\n\n",title,mcu,compiled,copyright);
-    printf("Initializing...\n");
+    if (POF) {
+        printf ("Power-on reset.\n");
+        wdResets = 0;
+        CLR_POF;
+    }
+    else if (WDT_FLAG){
+         printf("%s %d\n","Watch Dog Timer resets:",(int)++wdResets);
+         CLR_WDT_FLAG;
+    }
+
+    printf("Initializing");
     
-    pitch = 0; 
-    timeout = 7*ONESEC;                                         // allow up to 7 seconds in case the carrier is at the right margin
-    state = 0;
+    timeout = 7*ONESEC;                                         // allow up to 7 seconds in case the carrier has to return from the right margin
+    lasttime = (timeout/20);
     POR = 0;                                                    // reset off
+
+    WDT_CONTR |= 0x06;                                          // 4551.1 mS overflow
+    ENABLE_WDT;                                                 // run watch dog timer
+
 
     //////////// determine the pitch of the printwheel /////////////
     while(timeout) {                                            // loop for 7 seconds waiting for data from the Wheelwriter
+        if (lasttime != (timeout/20)) {
+            lasttime = (timeout/20);
+            putchar('.');
+            RESET_WDT;                                          // reset watch dog timer
+        }
+
         while(function_board_cmd_avail()){                      // if there's a command from the function board...
             function_board_cmd = get_function_board_cmd();      // retrieve the command from UART3
             send_to_printer_board(function_board_cmd);          // relay the command to the printer board
-            switch (state) {
+            switch(state) {
                 case 0:
                     if (function_board_cmd == 0x121) state = 1;
                     break;
@@ -421,45 +420,43 @@ void main(void){
 	    }
     }
 
-    switch (pitch) {
+    switch(pitch) {
         case 0x008:
-            ww_set_printwheel(TWELVECPI);                       // 10 microspaces/char, 16 microlines/line
-            tabStop = 6;                                        // tab stops every 6 characters (every 1/2 inch)
-            printf("PS printwheel\n");
+            ww_set_printwheel(TENCPI);                          // 10 cpi, 12 microspaces/char, 16 microlines/line
+            tabStop = 5;                                        // tab stops every 5 characters (every 1/2 inch)
+            printf("\nPS printwheel\n");
             break;
         case 0x010:
-            ww_set_printwheel(FIFTEENCPI);                      // 8 microspaces/char, 12 microlines/line
+            ww_set_printwheel(FIFTEENCPI);                      // 15 cpi, 8 microspaces/char, 12 microlines/line
             tabStop = 7;                                        // tab stops every 7 characters (every 1/2 inch)
-            printf("15P printwheel\n");
+            printf("\n15P printwheel\n");
             break;
         case 0x020:
-            ww_set_printwheel(TWELVECPI);                       // 10 microspaces/char, 16 microlines/line
+            ww_set_printwheel(TWELVECPI);                       // 12 cpi 10 microspaces/char, 16 microlines/line
             tabStop = 6;                                        // tab stops every 6 characters (every 1/2 inch)
-            printf("12P printwheel\n");
+            printf("\n12P printwheel\n");
             break;
         case 0x021:
-            ww_set_printwheel(TWELVECPI);                       // 10 microspaces/char, 16 microlines/line
+            ww_set_printwheel(TWELVECPI);                       // 12 cpi, 10 microspaces/char, 16 microlines/line
             tabStop = 6;                                        // tab stops every 6 characters (every 1/2 inch)
-            printf("No printwheel\n");
+            printf("\nNo printwheel\n");
             break;
         case 0x040:
-            ww_set_printwheel(TENCPI);                          // 12 microspaces/char, 16 microlines/line
+            ww_set_printwheel(TENCPI);                          // 10 cpi, 12 microspaces/char, 16 microlines/line
             tabStop = 5;                                        // tab stops every 5 characters (every 1/2 inch)
-            printf("10P printwheel\n");
+            printf("\n10P printwheel\n");
             break;
         default:
-            ww_set_printwheel(TWELVECPI);                       // 10 microspaces/char, 16 microlines/line
+            ww_set_printwheel(TWELVECPI);                       // 12 cpi, 10 microspaces/char, 16 microlines/line
             tabStop = 6;                                        // tab stops every 6 characters (every 1/2 inch)
-            printf("Unable to determine printwheel. Defaulting to 12P.\n");
-            printf("0x%02X\n",(int) pitch);
+            printf("\nUnable to determine printwheel. Defaulting to 12P.\n");
+            printf("0x%02X\n",(int)pitch);
+            pitch = 0x020;
     }
 
     //////////// determine the Wheelwriter model /////////////
-    wheelwriterModel = 0;
-    amberLED = ON;                                              // turn on the amber LED
     send_to_printer_board_wait(0x121);                          // command to "report Wheelwriter model"
     send_to_printer_board_wait(0x000);
-    amberLED = OFF;                                             // turn off the amber LED
     timeout=ONESEC;                                             // 1 second timeout
     
     while(timeout){                                             // loop for one second waiting for a reply from the printer board
@@ -469,7 +466,7 @@ void main(void){
         }
     }
 
-    switch (wheelwriterModel) {
+    switch(wheelwriterModel) {
         case 0x006:
             printf("Wheelwriter 3\n");
             break;
@@ -481,12 +478,17 @@ void main(void){
             break;
         default:
             printf("Unknown Wheelwriter model\n");
-            printf("0x%02X\n",(int) wheelwriterModel);
+            printf("0x%02X\n",(int)wheelwriterModel);
+            wheelwriterModel = 0x006;                           // delault to Wheelwriter 3
             errorLED=TRUE;               
             break;
     }
 
     printf("Ready\n");
+    initializing = FALSE;
+    amberLED = OFF;                                             // turn off the amber LED
+    greenLED = OFF;                                             // turn off the green LED
+    redLED = OFF;                                               // turn off the red LED
 
     state = 0;
 
@@ -501,7 +503,7 @@ void main(void){
 	    while(function_board_cmd_avail()) {                    // if there's a command from the Function Board...
             function_board_cmd = get_function_board_cmd();     // retrieve it from UART3
 
-            switch (state) {
+            switch(state) {
                 case 0:
                     if (function_board_cmd==0x121) state = 1; 
                     break;
@@ -516,7 +518,6 @@ void main(void){
                             printf("Reseting Wheelwriter...\n");// reset the wheelwriter
                             POR = 1;                            // power-on-reset on
                             POR = 0;                            // power-on-reset off
-                            putchar(CR);                        // return the console to the left margin
                         }
                         else {
                             ww_spin();                          // spin the printwheel when going from "typewriter" to "keyboard" mode
@@ -528,9 +529,10 @@ void main(void){
 
             if (typewriter){                                    // if "typewriter" mode 
                 send_to_printer_board(function_board_cmd);      // relay commands from the Function Board to the Printer Board, do not wait for acknowledge
+                //printf("%03X\n",function_board_cmd); 
             }
             else {                                              // if "keyboard" mode
-                send_ACK_to_function_board();                   // send Acknowledge to Function Board
+                send_ACK_to_function_board();                   // mimic Printer Board by sending Acknowledge to Function Board
                 putchar2(ww_decode_keys(function_board_cmd));   // convert the function board keystroke cmd to ASCII and print it on the serial console
             }
 	    }
@@ -542,9 +544,13 @@ void main(void){
             //printf("%03X\n",printer_board_reply); 
 	    }
 
+        // check for characters from the console
         if (char_avail2()) {                                    // if there is a character in the serial receive buffer...
             c = getchar2();                                     // retrieve the character from UART2
             print_char_on_WW(c);                                // send it to the Wheelwriter for printing
         }
+
+        RESET_WDT;                                              // reset watch dog timer each pass through the loop
+
     }
 }

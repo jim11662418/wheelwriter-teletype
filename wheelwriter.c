@@ -19,10 +19,10 @@ sbit amberLED = P0^6;                           // amber LED connected to pin 6 
 
 //------------------------------------------------------------------------------------------------
 // ASCII to Wheelwriter printwheel translation table
-// The Wheelwriter code indicates the position of the character on the printwheel. “a” (code 01) 
-// is at the 12 o’clock position of the printwheel. Going counter clockwise, “n” (code 02) is next 
-// character on the printwheel followed by “r” (code 03), “m” (code 04), “c” (code 05), “s” (code 06),
-// “d” (code 07), “h” (code 08), and so on.
+// The Wheelwriter printwheel code indicates the position of the character on the printwheel. 
+// “a” (code 01) is at the 12 o’clock position of the printwheel. Going counter clockwise, 
+// “n” (code 02) is next character on the printwheel followed by “r” (code 03), “m” (code 04),
+// “c” (code 05), “s” (code 06), “d” (code 07), “h” (code 08), and so on.
 //------------------------------------------------------------------------------------------------
 char code ASCII2printwheel[160] =  
 // col: 00    01    02    03    04    05    06    07    08    09    0A    0B    0C    0D    0E    0F    row:
@@ -47,8 +47,9 @@ char code ASCII2printwheel[160] =
 //       °     ±     ²     ³                 ¶                                   ¼     ½              
        0x44, 0x3C, 0x42, 0x43, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x47, 0x00, 0x00};// B0
 
-
+//------------------------------------------------------------------------------------------------
 // convert printwheel character to ASCII
+//------------------------------------------------------------------------------------------------
 code const char printwheel2ASCII[96] = {
 // a    n    r    m    c    s    d    h    l    f    k    ,    V    _    G    U  
   0x61,0x6E,0x72,0x6D,0x63,0x73,0x64,0x68,0x6C,0x66,0x6B,0x2C,0x56,0x2D,0x47,0x55,
@@ -63,61 +64,84 @@ code const char printwheel2ASCII[96] = {
 // x    q    v    z    w    j    .    y    b    g    u    p    i    t    o    e   
   0x78,0x71,0x76,0x7A,0x77,0x6A,0x2E,0x79,0x62,0x67,0x75,0x70,0x69,0x74,0x6F,0x65};
 
-
+//------------------------------------------------------------------------------------------------
 // backspace, no erase. decreases micro space count by uSpacesPerChar.
-void ww_backspace(void) {                        
+//------------------------------------------------------------------------------------------------
+void ww_backspace(void) {    
+    amberLED = ON;                    
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x006);                      // move the carrier horizontally
     send_to_printer_board_wait(0x000);                      // bit 7 is cleared for right to left direction
     send_to_printer_board_wait(uSpacesPerChar);    
     uSpaceCount -= uSpacesPerChar;
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // backspace 1/120 inch. decrements micro space count
+//------------------------------------------------------------------------------------------------
 void ww_micro_backspace(void) {
     if (uSpaceCount){                                       // only if the carrier is not at the left margin
+        amberLED = ON;
         send_to_printer_board_wait(0x121);
         send_to_printer_board_wait(0x006);                  // move the carrier horizontally
         send_to_printer_board_wait(0x000);                  // bit 7 is cleared for right to left direction
         send_to_printer_board_wait(0x001);                  // one microspace
         --uSpaceCount;
+        amberLED = OFF;
     }
 }
 
+//------------------------------------------------------------------------------------------------
 // To return the carrier to the left margin, the Wheelwriter requires an eleven bit number which 
 // indicates the number of micro spaces to move to reach the left margin. The upper three bits of
 // the 11-bit number are sent as the 3rd word of the command, and lower 8 bits are sent as the 4th
 // word. Bit 7 of the 3rd word is cleared to indicate carriage movement left direction.
 // resets micro space count back to zero.
+//------------------------------------------------------------------------------------------------
 void ww_carriage_return(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x006);                      // move the carrier horizontallly
     send_to_printer_board_wait((uSpaceCount>>8)&0x007);     // bit 7 is cleared for right to left direction, bits 0-2 = upper 3 bits of micro spaces to left margin
     send_to_printer_board_wait(uSpaceCount&0xFF);           // lower 8 bits of micro spaces to left margin
-    uSpaceCount = 0;                                        // clear count
+    uSpaceCount = 0;  
+    amberLED = OFF;                                      // clear count
 }
 
+//------------------------------------------------------------------------------------------------
 // ww_spins the printwheel as a visual and audible indication
+//------------------------------------------------------------------------------------------------
 void ww_spin(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x007);
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // horizontal tab number of "spaces". updates micro space count.
+//------------------------------------------------------------------------------------------------
 void ww_horizontal_tab(unsigned char spaces) {
     unsigned int s;
 
+    amberLED = ON;
     s = spaces*uSpacesPerChar;                              // number of microspaces to move right
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x006);                      // move the carrier horizontally
     send_to_printer_board_wait(((s>>8)&0x007)|0x80);        // bit 7 is set for left to right direction, bits 0-2 = upper 3 bits of micro spaces to move right
     send_to_printer_board_wait(s&0xFF);                     // lower 8 bits of micro spaces to move right
-    uSpaceCount += s;                                       // update micro space count
+    uSpaceCount += s;  
+    amberLED = OFF;                                     // update micro space count
 }
 
+//------------------------------------------------------------------------------------------------
 // backspaces and erases "letter". updates micro space count.
-// Note: erasing bold or underlined characters or characters on lines other than the current line not implemented yet.
+// Note: erasing bold or underlined characters or characters on lines other than 
+// the current line is not implemented yet.
+//------------------------------------------------------------------------------------------------
 void ww_erase_letter(unsigned char letter) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x006);                      // move the carrier horizontally
     send_to_printer_board_wait(0x000);                      // bit 7 is cleared for right to left direction
@@ -127,48 +151,73 @@ void ww_erase_letter(unsigned char letter) {
     send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);
     send_to_printer_board_wait(uSpacesPerChar);             // number of micro spaces to move right
     uSpaceCount -= uSpacesPerChar;                          // update the micro space count
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // paper up one line
+//------------------------------------------------------------------------------------------------
 void ww_linefeed(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x080|uLinesPerLine);        // bit 7 is set to indicate paper up direction, bits 0-4 indicate number of microlines for 1 full line
+    amberLED = OFF;
 }    
 
+//------------------------------------------------------------------------------------------------
 // paper down one line
+//------------------------------------------------------------------------------------------------
 void ww_reverse_linefeed(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x000|uLinesPerLine);        // bit 7 is cleared to indicate paper down direction, bits 0-4 indicate number of microlines for 1 full line
+    amberLED = OFF;
 }    
 
+//------------------------------------------------------------------------------------------------
 // paper up 1/2 line
-void ww_paper_up(void) {                    
+//------------------------------------------------------------------------------------------------
+void ww_paper_up(void) {     
+    amberLED = ON;               
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x080|(uLinesPerLine>>1));   // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/2 line
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // paper down 1/2 line
+//------------------------------------------------------------------------------------------------
 void ww_paper_down(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x000|(uLinesPerLine>>1));   // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/2 full line
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // paper up 1/8 line
+//------------------------------------------------------------------------------------------------
 void ww_micro_up(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x080|(uLinesPerLine>>3));   // bit 7 is set to indicate up direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
+    amberLED = OFF;
 }
 
+//------------------------------------------------------------------------------------------------
 // paper down 1/8 line
+//------------------------------------------------------------------------------------------------
 void ww_micro_down(void) {
+    amberLED = ON;
     send_to_printer_board_wait(0x121);
     send_to_printer_board_wait(0x005);                      // vertical movement
     send_to_printer_board_wait(0x000|(uLinesPerLine>>3));   // bit 7 is cleared to indicate down direction, bits 0-3 indicate number of microlines for 1/8 full line or 1/48"
+    amberLED = OFF;
 }
 
 //-----------------------------------------------------------
@@ -208,8 +257,10 @@ void ww_print_letter(unsigned char letter,attribute) {
 #define FIFTEENCPI 8                                        // number of micro spaces for each character on the 15P printwheel (15 cpi)
 #define TWELVECPI 10                                        // number of micro spaces for each character on the 12P printwheel (12 cpi)
 #define TENCPI 12                                           // number of micro spaces for each character on the 10P printwheel (10 cpi)
+//------------------------------------------------------------------------------------------------
 // set micro spaces per character and micro lines per line values according to the printwheel in use
 // microspace = 1/120th inch, micro line = 1/96th inch
+//------------------------------------------------------------------------------------------------
 void ww_set_printwheel(unsigned char pw) {
     switch(pw) {
         case FIFTEENCPI:                                    // 15P printwheel (15 cpi)

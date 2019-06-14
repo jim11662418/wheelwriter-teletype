@@ -105,8 +105,8 @@ void ww_carriage_return(void) {
     send_to_printer_board_wait(0x006);                      // move the carrier horizontallly
     send_to_printer_board_wait((uSpaceCount>>8)&0x007);     // bit 7 is cleared for right to left direction, bits 0-2 = upper 3 bits of micro spaces to left margin
     send_to_printer_board_wait(uSpaceCount&0xFF);           // lower 8 bits of micro spaces to left margin
-    uSpaceCount = 0;  
-    amberLED = OFF;                                      // clear count
+    uSpaceCount = 0;                                        // clear count
+    amberLED = OFF;                                         
 }
 
 //------------------------------------------------------------------------------------------------
@@ -131,8 +131,8 @@ void ww_horizontal_tab(unsigned char spaces) {
     send_to_printer_board_wait(0x006);                      // move the carrier horizontally
     send_to_printer_board_wait(((s>>8)&0x007)|0x80);        // bit 7 is set for left to right direction, bits 0-2 = upper 3 bits of micro spaces to move right
     send_to_printer_board_wait(s&0xFF);                     // lower 8 bits of micro spaces to move right
-    uSpaceCount += s;  
-    amberLED = OFF;                                     // update micro space count
+    uSpaceCount += s;                                       // update micro space count
+    amberLED = OFF;                                         
 }
 
 //------------------------------------------------------------------------------------------------
@@ -320,7 +320,7 @@ char ww_decode_keys(unsigned int WWdata) {
         case 2:                                             // 0x121,0x003 has been received...          
             keystate = 0;
             if (WWdata)                                     // 0x121,0x003,printwheel code
-               result = printwheel2ASCII[(WWdata-1)&0x5F]; 
+               result = printwheel2ASCII[(WWdata-1)]; 
             else
                result = SP;                                 // 0x121,0x003,0x000 is the sequence for SPACE
             break;
@@ -352,79 +352,79 @@ char ww_decode_keys(unsigned int WWdata) {
             // convert code key combinations into control keys i.e. code c is converted into control c
             switch(WWdata & 0x17F) {// bit 7 is cleared on WW3, set on WW6
                 case 0x002:	        // Code q
-                    result = DC1;
+                    result = DC1;   // converted to Control q
                     break;
                 case 0x004:	        // Code a
-                    result = SOH;
+                    result = SOH;   // converted to Control a
                     break;
                 case 0x006:	        // Code z
-                    result = SUB;
+                    result = SUB;   // converted to Control z
                     break;
                 case 0x00A:	        // Code w
-                    result = ETB;
+                    result = ETB;   // converted to Control w
                     break;
                 case 0x00C:	        // Code s
-                    result = DC3;
+                    result = DC3;   // converted to Control s
                     break;
                 case 0x00E:	        // Code x
-                    result = CAN;
+                    result = CAN;   // converted to Control x
                     break;
                 case 0x012:	        // Code e
-                    result = ENQ;
+                    result = ENQ;   // converted to Control e
                     break;
                 case 0x014:	        // Code d
-                    result = EOT;
+                    result = EOT;   // converted to Control d
                     break;
                 case 0x016:	        // Code c
-                    result = ETX;
+                    result = ETX;   // converted to Control c
                     break;
                 case 0x01A:	        // Code r
-                    result = DC2;
+                    result = DC2;   // converted to Control r
                     break;
                 case 0x01B:	        // Code t
-                    result = DC4;
+                    result = DC4;   // converted to Control t
                     break;
                 case 0x01C:	        // Code f
-                    result = ACK;
+                    result = ACK;   // converted to Control f
                     break;
                 case 0x01D:	        // Code g
-                    result = BEL;
+                    result = BEL;   // converted to Control q
                     break;
                 case 0x01E:	        // Code v
-                    result = SYN;
+                    result = SYN;   // converted to Control v
                     break;
                 case 0x01F:	        // Code b
-                    result = STX;
+                    result = STX;   // converted to Control b
                     break;
                 case 0x022:	        // Code u
-                    result = NAK;
+                    result = NAK;   // converted to Control u
                     break;
                 case 0x023:	        // Code y
-                    result = EM;
+                    result = EM;    // converted to Control y
                     break;
                 case 0x024:	        // Code j
-                    result = LF;
+                    result = LF;    // converted to Control j
                     break;
                 case 0x025:	        // Code h
-                    result = BS;
+                    result = BS;    // converted to Control h
                     break;
                 case 0x026:	        // Code m
-                    result = CR;
+                    result = CR;    // converted to Control m
                     break;
                 case 0x02A:	        // Code i
-                    result = HT;
+                    result = HT;    // converted to Control i
                     break;
                 case 0x02C:	        // Code k
-                    result = VT;
+                    result = VT;    // converted to Control k
                     break;
                 case 0x032:	        // Code o
-                    result = SI;
+                    result = SI;    // converted to Control o
                     break;
                 case 0x03A:	        // Code p
-                    result = DLE;
+                    result = DLE;   // converted to Control p
                     break;
                 case 0x072:	        // Code n
-                    result = SO;
+                    result = SO;    // converted to Control n
                     break;
             } // switch(WWdata & 0x17F)
             break;

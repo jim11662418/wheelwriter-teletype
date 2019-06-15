@@ -64,7 +64,7 @@ volatile unsigned char seconds = 0;     // uptime seconds
 unsigned char xdata wdResets _at_ 0x3F0;// count of watchdog resets
 
 code char title[]     = "Wheelwriter Teletype Version 1.2.0";
-code char mcu[]       = "STCmicro IAP15W4K61S4 MCU";
+code char mcu[]       = "for STCmicro IAP15W4K61S4 MCU";
 code char compiled[]  = "Compiled on " __DATE__ " at " __TIME__;
 code char copyright[] = "Copyright 2019 Jim Loos";
 
@@ -346,10 +346,10 @@ void main(void){
 	unsigned int loopcounter,function_board_cmd,printer_board_reply;
     unsigned char pitch = 0;
     unsigned char state = 0;
-    char c,lasttime;
+    char c,lastsec;
 
-    // After power-up, all PWM-related I/O ports are in high impedance state. These ports
-    // need to be set to quasi-bidirectional or strong push-pull mode for normal use.
+    // After power-up, all PWM-related I/O ports on the IAP15W4K61S4 are in high impedance state.
+    // These ports need to be set to quasi-bidirectional or strong push-pull mode for normal use.
     // Affected ports: P0.6,P0.7,P1.6,P1.7,P2.1,P2.2,P2.3,P2.7,P3.7,P4.2,P4.4,P4.5
     P0M1 = 0;                                                   // set P0 to quasi-bidirectional
     P0M0 = 0;
@@ -380,24 +380,20 @@ void main(void){
     }
 
     printf("Initializing");
-    
-    timeout = 7*ONESEC;                                         // allow up to 7 seconds in case the carrier has to return from the right margin
-    lasttime = (timeout/20);
+    lastsec = seconds;
     POR = 0;                                                    // reset off
-
     WDT_CONTR |= 0x06;                                          // 4551.1 mS overflow
-    ENABLE_WDT;                                                 // run watch dog timer
-
+    ENABLE_WDT;                                                 // run watch dog timer                                        // run watch dog timer
 
     //////////// determine the pitch of the printwheel /////////////
-    while(timeout) {                                            // loop for 7 seconds waiting for data from the Wheelwriter
-        if (lasttime != (timeout/20)) {
-            lasttime = (timeout/20);
+    while(!pitch) {                                             // loop until the printer board replies to 0x121,0x001...
+        if (lastsec != seconds) {
+            lastsec = seconds;
             putchar('.');
-            RESET_WDT;                                          // reset watch dog timer
+            RESET_WDT;                                          // reset watch dog timer every second
         }
 
-        while(function_board_cmd_avail()){                      // if there's a command from the function board...
+        if (function_board_cmd_avail()){                        // if there's a command from the function board...
             function_board_cmd = get_function_board_cmd();      // retrieve the command from UART3
             send_to_printer_board(function_board_cmd);          // relay the command to the printer board
             switch(state) {
@@ -407,17 +403,46 @@ void main(void){
                 case 1:
                     if (function_board_cmd == 0x001) state = 2; 
                     else state = 0;                             // 0x121,0x001 is the "reset" command  from the function board
-                    break; 
             } 
         }
-   	    while(printer_board_reply_avail()) {                    // if there's a reply from the Printer Board...
+
+   	    if (printer_board_reply_avail()) {                      // if there's a reply from the Printer Board...
             printer_board_reply = get_printer_board_reply();    // retrieve the reply from UART4
             send_to_function_board(printer_board_reply);        // relay replies from the Printer Board to the Function Board
-            if (state==2) {                                     // if the reset command has been sent, the reply from the printer board is the printwheel pitch
-                pitch = printer_board_reply;
-                state = 3;
+            if (state == 2) {                                   // if the reset command has been sent, the reply from the printer board is the printwheel pitch
+                pitch = printer_board_reply;                    // we now know the pitch of the printwheel
             }
 	    }
+    }
+
+    //////////// relay the initialization commands from Function to Printer boards /////////////
+    timeout = ONESEC;                                           
+    while(timeout) {                                            // loop for 1 second relaying data between function and printer boards
+        if (lastsec != seconds) {
+            lastsec = seconds;
+            putchar('.');
+            RESET_WDT;                                          // reset watch dog timer every second
+        }
+
+        if (function_board_cmd_avail()){                        // if there's a command from the function board...
+            send_to_printer_board(get_function_board_cmd());    // relay the command to the printer board
+        }
+   	    if (printer_board_reply_avail()) {                      // if there's a reply from the Printer Board...
+            send_to_function_board(get_printer_board_reply());  // relay replies from the Printer Board to the Function Board
+	    }
+    }
+
+    //////////// determine the Wheelwriter model /////////////
+    send_to_printer_board_wait(0x121);                          // command to "report Wheelwriter model"
+    send_to_printer_board_wait(0x000);
+    timeout=ONESEC;                                             // 1 second timeout
+
+    timeout = ONESEC;                                           // allow up to 2 seconds
+    while(timeout){                                             // loop for one second waiting for a reply from the printer board
+        if (printer_board_reply_avail()) {                      // if there's a reply from the Printer Board...
+            printer_board_reply = get_printer_board_reply();    // retrieve the replay from UART4
+            wheelwriterModel = printer_board_reply;
+        }
     }
 
     switch(pitch) {
@@ -454,18 +479,6 @@ void main(void){
             pitch = 0x020;
     }
 
-    //////////// determine the Wheelwriter model /////////////
-    send_to_printer_board_wait(0x121);                          // command to "report Wheelwriter model"
-    send_to_printer_board_wait(0x000);
-    timeout=ONESEC;                                             // 1 second timeout
-    
-    while(timeout){                                             // loop for one second waiting for a reply from the printer board
-	    while(printer_board_reply_avail()) {                    // while there's a reply from the Printer Board...
-            printer_board_reply = get_printer_board_reply();    // retrieve the replay from UART4
-            wheelwriterModel = printer_board_reply;
-        }
-    }
-
     switch(wheelwriterModel) {
         case 0x006:
             printf("Wheelwriter 3\n");
@@ -481,7 +494,6 @@ void main(void){
             printf("0x%02X\n",(int)wheelwriterModel);
             wheelwriterModel = 0x006;                           // delault to Wheelwriter 3
             errorLED=TRUE;               
-            break;
     }
 
     printf("Ready\n");
@@ -513,10 +525,11 @@ void main(void){
                     break;
                 case 2:
                     if ((function_board_cmd &0x7F)==0x04F) {    // 0x121,0x00E,0x047 is Code-Erase key combo to toggle between "typewriter" and "keyboard" modes
-                        typewriter = !typewriter;               // toggle the flag
+                        typewriter = !typewriter;               // toggle the typewriter/keyboard flag
                         if (typewriter) {                       // when returning from "keyboard" to "typewriter" mode...    
-                            printf("Reseting Wheelwriter...\n");// reset the wheelwriter
+                            printf("\nReseting Wheelwriter...\n");// reset the wheelwriter
                             POR = 1;                            // power-on-reset on
+                            for(lastsec=0;lastsec<100;++lastsec);
                             POR = 0;                            // power-on-reset off
                         }
                         else {

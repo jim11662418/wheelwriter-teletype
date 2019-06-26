@@ -20,9 +20,9 @@ sbit amberLED = P0^6;                           // amber LED connected to pin 6 
 //------------------------------------------------------------------------------------------------
 // ASCII to Wheelwriter printwheel translation table
 // The Wheelwriter printwheel code indicates the position of the character on the printwheel. 
-// ìaî (code 01) is at the 12 oíclock position of the printwheel. Going counter clockwise, 
-// ìnî (code 02) is next character on the printwheel followed by ìrî (code 03), ìmî (code 04),
-// ìcî (code 05), ìsî (code 06), ìdî (code 07), ìhî (code 08), and so on.
+// ‚Äúa‚Äù (code 01) is at the 12 o‚Äôclock position of the printwheel. Going counter clockwise, 
+// ‚Äún‚Äù (code 02) is next character on the printwheel followed by ‚Äúr‚Äù (code 03), ‚Äúm‚Äù (code 04),
+// ‚Äúc‚Äù (code 05), ‚Äús‚Äù (code 06), ‚Äúd‚Äù (code 07), ‚Äúh‚Äù (code 08), and so on.
 //------------------------------------------------------------------------------------------------
 char code ASCII2printwheel[160] =  
 // col: 00    01    02    03    04    05    06    07    08    09    0A    0B    0C    0D    0E    0F    row:
@@ -42,9 +42,9 @@ char code ASCII2printwheel[160] =
        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 80      
 //     
        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 90      
-//                   ¢                             ß                                                  
+//                   ¬¢                             ¬ß                                                  
        0x00, 0x00, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // A0      
-//       ∞     ±     ≤     ≥                 ∂                                   º     Ω              
+//       ¬∞     ¬±     ¬≤     ¬≥                 ¬∂                                   ¬º     ¬Ω              
        0x44, 0x3C, 0x42, 0x43, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x47, 0x00, 0x00};// B0
 
 //------------------------------------------------------------------------------------------------
@@ -57,9 +57,9 @@ code const char printwheel2ASCII[96] = {
   0x46,0x42,0x5A,0x48,0x50,0x29,0x52,0x4C,0x53,0x4E,0x43,0x54,0x44,0x45,0x49,0x41,
 // J    O    (    M    .    Y    ,    /    W    9    K    3    X    1    2    0 
   0x4A,0x4F,0x28,0x4D,0x2E,0x59,0x2C,0x2F,0x57,0x39,0x4B,0x33,0x58,0x31,0x32,0x30,
-// 5    4    6    8    7    *    $    #    %    ¢    +    ±    @    Q    &    ]
+// 5    4    6    8    7    *    $    #    %    ¬¢    +    ¬±    @    Q    &    ]
   0x35,0x34,0x36,0x38,0x37,0x2A,0x24,0x23,0x25,0xA2,0x2B,0xB1,0x40,0x51,0x26,0x5D,
-// [    ≥    ≤    ∫    ß    ∂    Ω    º    !    ?    "    '    =    :    -    ;   
+// [    ¬≥    ¬≤    ¬∫    ¬ß    ¬∂    ¬Ω    ¬º    !    ?    "    '    =    :    -    ;   
   0x5B,0xB3,0xB2,0xBA,0xA7,0xB6,0xBD,0xBC,0x21,0x3F,0x22,0x60,0x3D,0x3A,0x5F,0x3B,
 // x    q    v    z    w    j    .    y    b    g    u    p    i    t    o    e   
   0x78,0x71,0x76,0x7A,0x77,0x6A,0x2E,0x79,0x62,0x67,0x75,0x70,0x69,0x74,0x6F,0x65};
@@ -282,8 +282,10 @@ void ww_set_printwheel(unsigned char pw) {
 }
 
 //------------------------------------------------------------------------------------------
-// decodes the data stream consisting of the 9 bit words received from the Wheelwriter BUS
-// and returns the decoded ASCII character. 
+// decodes the 9 bit words received from the Wheelwriter Function Board on the BUS when keys
+// are pressed and returns the equivalent ASCII character. typically the Wheelwriter sends a 
+// sequence of three words (sometimes more, depending on the key) for each keypress. Call this
+// function for each word from the Function Board. Intermediate words return zeros.
 //------------------------------------------------------------------------------------------
 char ww_decode_keys(unsigned int WWdata) {
     static char keystate = 0;

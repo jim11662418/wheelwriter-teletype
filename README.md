@@ -1,4 +1,4 @@
-# Wheelwriter "Teletype"
+# IBM Wheelwriter "Teletype"
 This project uses an STCmicro STC15W4K32S4 (an Intel 8052-compatible microcontroller) to turn an IBM Wheelwriter Electronic Typewriter into a teletype-like device. This project only works on earlier Wheelwriter models, the ones that internally have two circuit boards: the Function Board and the Printer Board (Wheelwriter models 3, 5 and 6).
 
 The cable that normally connects the Wheelwriter's Function and Printer boards is disconnected and the MCU is connected instead in series between the two boards. The MCU uses one of its four UARTs to communicate with the Function Board and a second UART to communicate with the Printer Board. See the schematic for details.

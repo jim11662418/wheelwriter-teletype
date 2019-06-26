@@ -352,6 +352,8 @@ char ww_decode_keys(unsigned int WWdata) {
         case 7:                                             // 0x121,0x00E has ben received (code key combination)
             keystate = 0;
             // convert code key combinations into control keys i.e. code c is converted into control c
+            // be judicious in your use of code key combinations. some combinations (code+c, code+u, code+q, etc
+            // can result in unexpected behavior in the Wheelwriter.
             switch(WWdata & 0x17F) {// bit 7 is cleared on WW3, set on WW6
                 case 0x002:	        // Code q
                     result = DC1;   // converted to Control q

@@ -51,14 +51,13 @@ bit autoLinefeed = FALSE;               // when true, automatically print a line
 bit typewriter = TRUE;                  // when true wheelwriter keystrokes go to wheelwriter, when false wheelwriter keystrokes go to serial console
 bit errorLED = FALSE;                   // makes the red LED flash when TRUE
 bit initializing = TRUE;                // makes all three LEDs flash during initialization    
+bit monitor = FALSE;                    // monitor communications between function and printer boards
 unsigned char wheelwriterModel = 0;     // 0x006 = model 3, 0x025 = model 5, 0x026 = model 6
 unsigned char attribute = 0;            // bit 0=bold, bit 1=continuous underline, bit 2=multiple word underline
 unsigned char column = 1;               // current print column (1=left margin)
 unsigned char tabStop = 5;              // horizontal tabs every 5 spaces (every 1/2 inch)
 volatile unsigned char timeout = 0;     // decremented every 50 milliseconds, used for detecting timeouts
-volatile unsigned char hours = 0;       // uptime hours
-volatile unsigned char minutes = 0;     // uptime minutes
-volatile unsigned char seconds = 0;     // uptime seconds
+volatile unsigned long upTime = 0;      // uptime in seconds
 
 // uninitialized variables in xdata RAM, contents unaffected by reset
 unsigned char xdata wdResets _at_ 0x3F0;// count of watchdog resets
@@ -66,7 +65,44 @@ unsigned char xdata wdResets _at_ 0x3F0;// count of watchdog resets
 code char title[]     = "Wheelwriter Teletype Version 1.2.0";
 code char mcu[]       = "for STCmicro IAP15W4K61S4 MCU";
 code char compiled[]  = "Compiled on " __DATE__ " at " __TIME__;
-code char copyright[] = "Copyright 2019 Jim Loos";
+code char copyright[] = "Copyright 2019-2020 Jim Loos";
+
+code char help[]      = "\nControl characters:\n"
+                        "BEL 0x07        spins the printwheel\n"
+                        "BS  0x08        non-destructive backspace\n"
+                        "TAB 0x09        horizontal tab\n"
+                        "LF  0x0A        paper up one line\n"
+                        "VT  0x0B        paper up one line\n"
+                        "CR  0x0D        returns carriage to left margin\n"
+                        "ESC 0x1B        see Diablo 630 commands below...\n"
+                        "\nDiablo 630 commands emulated:\n"
+                        "<ESC><O>        selects bold printing for one line\n"
+                        "<ESC><&>        cancels bold printing\n"
+                        "<ESC><E>        selects continuous underlining\n"
+                        "<ESC><R>        cancels underlining\n"
+                        "<ESC><X>        cancels both bold and underlining\n"
+                        "<ESC><U>        half line feed\n"
+                        "<ESC><D>        reverse half line feed\n"
+                        "<ESC><BS>       backspace 1/120 inch\n"
+                        "<ESC><LF>       reverse line feed\n"
+                        "\nPrinter control not part of the Diablo 630 emulation:\n"
+                        "<ESC><u>        selects micro paper up\n"
+                        "<ESC><d>        selects micro paper down\n"
+                        "<ESC><b>        selects broken underlining\n"
+                        "<ESC><l><n>     auto linefeed on or off\n"
+                        "<ESC><p>        selects Pica pitch\n"
+                        "<ESC><e>        selects Elite pitch\n"
+                        "<ESC><m>        selects Micro Elite pitch\n"
+                        "\nDiagnostics/debugging:\n"
+                        "<ESC><^Z><c>    show the current column\n"
+                        "<ESC><^Z><e><n> turn flashing red error LED on or off\n"
+                        "<ESC><^Z><m>    monitor communications between boards\n"
+                        "<ESC><^Z><p><n> show the value of Port n (0-5)\n"
+                        "<ESC><^Z><r>    reset the MCU and wheelwriter\n"
+                        "<ESC><^Z><u>    show the uptime\n"
+                        "<ESC><^Z><w>    show the number of watchdog resets\n"
+                        "\nCode+Erase toggles typewriter/keyboard mode\n\n";
+
 
 //------------------------------------------------------------
 // Timer 0 ISR: interrupt every 50 milliseconds, 20 times per second
@@ -88,13 +124,7 @@ void timer0_isr(void) interrupt 1 using 1{
 
     if(++ticks == 20) { 		    // if 20 ticks (one second) have elapsed...
         ticks = 0;
-        if (++seconds == 60) {		// if 60 seconds (one minute) has elapsed...
-            seconds = 0;
-            if (++minutes == 60) {	// if 60 minutes (one hour) has elapsed...
-                minutes = 0;
-                ++hours;
-            }
-        }
+        ++upTime;
     }
 }
 
@@ -110,40 +140,43 @@ void timer0_isr(void) interrupt 1 using 1{
 //  TAB 0x09    horizontal tab to next tab stop
 //  LF  0x0A    moves paper up one line
 //  VT  0x0B    moves paper up one line
-//  CR  0x0D    returns carriage to left margin, if switch 1 is on, moves paper up one line (linefeed)
+//  CR  0x0D    returns carriage to left margin, if autolinefeed is on, paper moves up one line (linefeed)
 //  ESC 0x1B    see Diablo 630 commands below...
 //
 // Diablo 630 commands emulated:
-// <ESC><O>  selects bold printing for one line
-// <ESC><&>  cancels bold printing
-// <ESC><E>  selects continuous underlining  (spaces between words are underlined) for one line
-// <ESC><R>  cancels underlining
-// <ESC><X>  cancels both bold and underlining
-// <ESC><U>  half line feed (paper up 1/2 line)
-// <ESC><D>  reverse half line feed (paper down 1/2 line)
-// <ESC><BS> backspace 1/120 inch
-// <ESC><LF> reverse line feed (paper down one line)
+//  <ESC><O>    selects bold printing for one line
+//  <ESC><&>    cancels bold printing
+//  <ESC><E>    selects continuous underlining  (spaces between words are underlined) for one line
+//  <ESC><R>    cancels underlining
+//  <ESC><X>    cancels both bold and underlining
+//  <ESC><U>    half line feed (paper up 1/2 line)
+//  <ESC><D>    reverse half line feed (paper down 1/2 line)
+//  <ESC><BS>   backspace 1/120 inch
+//  <ESC><LF>   reverse line feed (paper down one line)
 //
 // printer control not part of the Diablo 630 emulation:
-// <ESC><u>  selects micro paper up (1/8 line or 1/48")
-// <ESC><d>  selects micro paper down (1/8 line or 1/48")
-// <ESC><b>  selects broken underlining (spaces between words are not underlined)
-// <ESC><l><n> auto linefeed (n=1 is on, n=0 is off)
-// <ESC><p>  selects Pica pitch (10 characters/inch or 12 point)
-// <ESC><e>  selects Elite pitch (12 characters/inch or 10 point)
-// <ESC><m>  selects Micro Elite pitch (15 characters/inch or 8 point)
+//  <ESC><u>    selects micro paper up (1/8 line or 1/48")
+//  <ESC><d>    selects micro paper down (1/8 line or 1/48")
+//  <ESC><b>    selects broken underlining (spaces between words are not underlined)
+//  <ESC><l><n> auto linefeed (n=1 is on, n=0 is off)
+//  <ESC><p>    selects Pica pitch (10 characters/inch or 12 point)
+//  <ESC><e>    selects Elite pitch (12 characters/inch or 10 point)
+//  <ESC><m>    selects Micro Elite pitch (15 characters/inch or 8 point)
 //
 // diagnostics/debugging:
-// <ESC><^Z><c> print (on the serial console) the current column
-// <ESC><^Z><e><n> turn flashing red error LED on or off (n=1 is on, n=0 is off)
-// <ESC><^Z><p><n> print (on the serial console) the value of Port n (0-5) as 2 digit hex number
-// <ESC><^Z><r> reset both the MCU and the wheelwriter
-// <ESC><^Z><u> print (on the serial console) the uptime as HH:MM:SS
-// <ESC><^Z><w> print (on the serial console) the number of watchdog resets
+//  <ESC><h>        display help
+//  <ESC><^Z><c>    show (on the serial console) the current column
+//  <ESC><^Z><e><n> turn flashing red error LED on or off (n=1 is on, n=0 is off)
+//  <ESC><^Z><m>    monitor communications between function and printer boards
+//  <ESC><^Z><p><n> show (on the serial console) the value of Port n (0-5) as 2 digit hex number
+//  <ESC><^Z><r>    reset both the MCU and the wheelwriter
+//  <ESC><^Z><u>    show (on the serial console) the uptime as HH:MM:SS
+//  <ESC><^Z><w>    show (on the serial console) the number of watchdog resets
 //-------------------------------------------------------------------------------------------
 void print_char_on_WW(unsigned char charToPrint) {
     static char escape = 0;                                 // escape sequence state
     char i,t;
+    int d,h,m,s;
 
     switch(escape) {
         case 0:
@@ -251,7 +284,10 @@ void print_char_on_WW(unsigned char charToPrint) {
                     break;
                 case '\x1A':                                // <ESC><^Z> for remote diagnostics
                     escape = 2;
-                    break;  
+                    break; 
+                case 'H': 
+                case 'h':
+                    printf(help);
             } // switch(charToPrint)
             break;  // case 1:
         case 2:                                             // this is the third character of the escape sequence...
@@ -263,6 +299,9 @@ void print_char_on_WW(unsigned char charToPrint) {
                 case 'e':                                   // <ESC><^Z><e> controls the red error LED. the next character turn is on or off
                     escape = 4;
                     break;
+                case 'm':                                   // <ESC><^Z><m> monitor communications
+                    monitor = !monitor;                     // toggle monitor flag
+                    break;
                 case 'p':                                   // <ESC><^Z><p> print port values. the next character selects the port number
                     escape = 3;
                     break;
@@ -272,7 +311,11 @@ void print_char_on_WW(unsigned char charToPrint) {
                 case 't': 
                     break;
                 case 'u':                                   // <ESC><^Z><u> print uptime
-                    printf("%s %02u%c%02u%c%02u\n","Uptime:",(int)hours,':',(int)minutes,':',(int)seconds);
+                    d = upTime/86400;                       // days (not displayed)
+                    h = (upTime%86400)/3600;                // hours
+                    m = (upTime%3600)/60;                   // minutes
+                    s = upTime%60;                          // seconds
+                    printf("%s %02d%c%02d%c%02d\n","Uptime:",h,':',m,':',s);
                     break; 
                 case 'w':                                   // <ESC><^Z><w> print watchdog resets
                     printf("%s %d\n","Watch Dog Timer resets:",(int)wdResets);
@@ -346,7 +389,8 @@ void main(void){
 	unsigned int loopcounter,function_board_cmd,printer_board_reply;
     unsigned char pitch = 0;
     unsigned char state = 0;
-    char c,lastsec;
+    char c;
+    unsigned long lastsec = 0;
 
     // After power-up, all PWM-related I/O ports on the IAP15W4K61S4 are in high impedance state.
     // These ports need to be set to quasi-bidirectional or strong push-pull mode for normal use.
@@ -370,7 +414,7 @@ void main(void){
 
     printf("\n%s\n%s\n%s\n%s\n\n",title,mcu,compiled,copyright);
     if (POF) {
-        printf ("Power-on reset.\n");
+        printf ("Power-on reset\n");
         wdResets = 0;
         CLR_POF;
     }
@@ -380,15 +424,16 @@ void main(void){
     }
 
     printf("Initializing");
-    lastsec = seconds;
+    lastsec = upTime;
     POR = 0;                                                    // reset off
     WDT_CONTR |= 0x06;                                          // 4551.1 mS overflow
     ENABLE_WDT;                                                 // run watch dog timer                                        // run watch dog timer
+    timeout = 7*ONESEC;                                         // seven seconds in case carrier is at extreme right stop
 
     //////////// determine the pitch of the printwheel /////////////
-    while(!pitch) {                                             // loop until the printer board replies to 0x121,0x001...
-        if (lastsec != seconds) {
-            lastsec = seconds;
+    while(!pitch && timeout) {                                  // loop for 7 seconds or until the printer board replies to 0x121,0x001...
+        if (lastsec != upTime) {
+            lastsec = upTime;
             putchar('.');
             RESET_WDT;                                          // reset watch dog timer every second
         }
@@ -416,10 +461,10 @@ void main(void){
     }
 
     //////////// relay the initialization commands from Function to Printer boards /////////////
-    timeout = ONESEC;                                           
+    timeout = ONESEC;                                           // empirically determined 1 second is adequate                                      
     while(timeout) {                                            // loop for 1 second relaying data between function and printer boards
-        if (lastsec != seconds) {
-            lastsec = seconds;
+        if (lastsec != upTime) {
+            lastsec = upTime;
             putchar('.');
             RESET_WDT;                                          // reset watch dog timer every second
         }
@@ -435,13 +480,13 @@ void main(void){
     //////////// determine the Wheelwriter model /////////////
     send_to_printer_board_wait(0x121);                          // command to "report Wheelwriter model"
     send_to_printer_board_wait(0x000);
-    timeout=ONESEC;                                             // 1 second timeout
+    timeout=2*ONESEC;                                           // 2 seconds timeout
 
-    timeout = ONESEC;                                           // allow up to 2 seconds
-    while(timeout){                                             // loop for one second waiting for a reply from the printer board
+    timeout = 2*ONESEC;                                           
+    while(!wheelwriterModel && timeout){                        // loop until the model is known or for 2 seconds waiting for a reply from the printer board
         if (printer_board_reply_avail()) {                      // if there's a reply from the Printer Board...
             printer_board_reply = get_printer_board_reply();    // retrieve the replay from UART4
-            wheelwriterModel = printer_board_reply;
+            wheelwriterModel = printer_board_reply;             // we now know the Wheelwriter model
         }
     }
 
@@ -496,6 +541,7 @@ void main(void){
             errorLED=TRUE;               
     }
 
+    printf("ESC H for help\n");
     printf("Ready\n");
     initializing = FALSE;
     amberLED = OFF;                                             // turn off the amber LED
@@ -529,7 +575,7 @@ void main(void){
                         if (typewriter) {                       // when returning from "keyboard" to "typewriter" mode...    
                             printf("\nReseting Wheelwriter...\n");// reset the wheelwriter
                             POR = 1;                            // power-on-reset on
-                            for(lastsec=0;lastsec<100;++lastsec);
+                            for(lastsec=0;lastsec<110;++lastsec); // 1 mSec delay
                             POR = 0;                            // power-on-reset off
                         }
                         else {
@@ -542,19 +588,22 @@ void main(void){
 
             if (typewriter){                                    // if "typewriter" mode 
                 send_to_printer_board(function_board_cmd);      // relay commands from the Function Board to the Printer Board, do not wait for acknowledge
-                //printf("%03X\n",function_board_cmd); 
+                if (monitor)                                    // if the monitor flag is set...
+                    printf("f: %03X\n",function_board_cmd); 
             }
             else {                                              // if "keyboard" mode
                 send_ACK_to_function_board();                   // mimic Printer Board by sending Acknowledge to Function Board
                 putchar2(ww_decode_keys(function_board_cmd));   // convert the function board keystroke cmd to ASCII and print it on the serial console
             }
-	    }
+	    } // while(function_board_cmd_avail())
 
         // check for replies from the printer board
 	    while (printer_board_reply_avail()) {                   // if there's a reply from the Printer Board...
             printer_board_reply = get_printer_board_reply();    // retrieve the reply from UART4
             send_to_function_board(printer_board_reply);        // relay replies from the Printer Board to the Function Board
-            //printf("%03X\n",printer_board_reply); 
+            if (monitor)                                        // if the monitor flag is set...
+                if (printer_board_reply)                        // if not ACKnowledge...
+                    printf("p: %03X\n",printer_board_reply); 
 	    }
 
         // check for characters from the console

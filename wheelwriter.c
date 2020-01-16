@@ -290,6 +290,7 @@ void ww_set_printwheel(unsigned char pw) {
 //--------------------------------------------------------------------------------------------------
 char ww_decode_keys(unsigned int WWdata) {
     static char keystate = 0;
+    static char asciiValue = 0;
     char result;
 
     result = 0;
@@ -321,11 +322,11 @@ char ww_decode_keys(unsigned int WWdata) {
         } // switch(WWdata)
             break;
         case 2:                                             // 0x121,0x003 has been received...          
-            keystate = 0;
-            if (WWdata)                                     // 0x121,0x003,printwheel code
-               result = printwheel2ASCII[(WWdata-1)];       // get the ASCII code from the table
+            keystate = 8;                                   // must wait for the microspaces value to follow
+            if (WWdata)                                     // 0x121,0x003,<printwheel code>
+               asciiValue = printwheel2ASCII[(WWdata-1)];   // get the ASCII code from the table
             else
-               result = SP;                                 // 0x121,0x003,0x000 is the sequence for SPACE
+               asciiValue = SP;                             // else, 0x121,0x003,0x000 is the sequence for SPACE
             break;
         case 3:                                             // 0x121,0x006 has been received...
             if (WWdata & 0x080)                             // if bit 7 is set...         
@@ -430,6 +431,10 @@ char ww_decode_keys(unsigned int WWdata) {
                     result = SO;    // converted to Control N
                     break;
             } // switch(WWdata & 0x17F)
+            break;
+        case 8:                                                 // 0x121,0x003,printwheel code  has been received, waiting for microspaces...      
+            keystate = 0;                                       // reset keystate back to zero    
+            result = asciiValue;                                // return the ASCII equivalent to the printwheel code
             break;
     }   // switch(keystate)
     return(result);

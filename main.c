@@ -54,7 +54,7 @@ bit initializing = TRUE;                // makes all three LEDs flash during ini
 bit monitor = FALSE;                    // monitor communications between function and printer boards
 unsigned char wheelwriterModel = 0;     // 0x006 = model 3, 0x025 = model 5, 0x026 = model 6
 unsigned char attribute = 0;            // bit 0=bold, bit 1=continuous underline, bit 2=multiple word underline
-unsigned int  column = 1;               // current print column (1=left margin)
+unsigned char column = 1;               // current print column (1=left margin)
 unsigned char tabStop = 5;              // horizontal tabs every 5 spaces (every 1/2 inch)
 volatile unsigned char timeout = 0;     // decremented every 50 milliseconds, used for detecting timeouts
 volatile unsigned long upTime = 0;      // uptime in seconds
@@ -589,7 +589,7 @@ void main(void){
                     if ((function_board_cmd &0x7F)==0x04F) {    // 0x121,0x00E,0x047 is Code-Erase key combo to toggle between "typewriter" and "keyboard" modes
                         typewriter = !typewriter;               // toggle the typewriter/keyboard flag
                         if (typewriter) {                       // when returning from "keyboard" to "typewriter" mode...    
-                            printf("\nReseting Wheelwriter...\n");// reset the wheelwriter
+                            //printf("\nReseting Wheelwriter...\n");
                             P_RESET = 1;                        // Printer Board power-on-reset on
                             F_RESET = 1;                        // Function Board power-on-reset on
                             for(delay=0;delay<110;++delay);     // ~1 mSec delay
@@ -640,7 +640,7 @@ void main(void){
                             putchar2(CR);
                             break;
                         default:                                // all other keys
-                            if (++column > 119) {        // reset the Function Board since it will output a maximum of 123 characters per line without a carriage return
+                            if (++column > 119) {               // reset the Function Board since it will output a maximum of 123 characters per line without a carriage return
                                 F_RESET = 1;                    // Function Board reset on
                                 for(delay=0;delay<110;++delay); // ~1 mSec delay
                                 F_RESET = 0;                    // Function Board reset off 

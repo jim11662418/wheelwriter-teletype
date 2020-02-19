@@ -10,11 +10,15 @@
 #define ON 0                                    // 0 turns the amber LED on
 #define OFF 1                                   // 1 turns the amber LED off
 
+extern unsigned char column;                    // defined in main.c
+
+sbit P_RESET  = P0^4;                   		// Power-On-Reset for Printer Board output pin 5 0=on, 1=off
+sbit F_RESET  = P1^4;                   		// Power-On-Reset for Function Board output pin 13 0=on, 1=off
+sbit amberLED = P0^6;                           // amber LED connected to pin 6 0=on, 1=off
+
 unsigned char uSpacesPerChar = 10;              // micro spaces per character (8 for 15cpi, 10 for 12cpi and PS, 12 for 10cpi)
 unsigned char uLinesPerLine = 16;               // micro lines per line (12 for 15cpi; 16 for 10cpi, 12cpi and PS)
 unsigned int  uSpaceCount = 0;                  // number of micro spaces on the current line (for carriage return)
-
-sbit amberLED = P0^6;                           // amber LED connected to pin 6 0=on, 1=off
 
 //------------------------------------------------------------------------------------------------
 // ASCII to Wheelwriter printwheel translation table
@@ -47,21 +51,44 @@ char code ASCII2printwheel[160] =
        0x44, 0x3C, 0x42, 0x43, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x47, 0x00, 0x00};// B0
 
 //------------------------------------------------------------------------------------------------
-// convert printwheel character to ASCII
+// convert printwheel character codes to ASCII
 //------------------------------------------------------------------------------------------------
-code const char printwheel2ASCII[96] = {
-// a    n    r    m    c    s    d    h    l    f    k    ,    V    _    G    U  
-  0x61,0x6E,0x72,0x6D,0x63,0x73,0x64,0x68,0x6C,0x66,0x6B,0x2C,0x56,0x2D,0x47,0x55,
-// F    B    Z    H    P    )    R    L    S    N    C    T    D    E    I    A       
-  0x46,0x42,0x5A,0x48,0x50,0x29,0x52,0x4C,0x53,0x4E,0x43,0x54,0x44,0x45,0x49,0x41,
-// J    O    (    M    .    Y    ,    /    W    9    K    3    X    1    2    0 
-  0x4A,0x4F,0x28,0x4D,0x2E,0x59,0x2C,0x2F,0x57,0x39,0x4B,0x33,0x58,0x31,0x32,0x30,
-// 5    4    6    8    7    *    $    #    %    ¢    +    ±    @    Q    &    ]
-  0x35,0x34,0x36,0x38,0x37,0x2A,0x24,0x23,0x25,0xA2,0x2B,0xB1,0x40,0x51,0x26,0x5D,
-// [    ³    ²    º    §    ¶    ½    ¼    !    ?    "    '    =    :    -    ;   
-  0x5B,0xB3,0xB2,0xBA,0xA7,0xB6,0xBD,0xBC,0x21,0x3F,0x22,0x60,0x3D,0x3A,0x5F,0x3B,
-// x    q    v    z    w    j    .    y    b    g    u    p    i    t    o    e   
-  0x78,0x71,0x76,0x7A,0x77,0x6A,0x2E,0x79,0x62,0x67,0x75,0x70,0x69,0x74,0x6F,0x65};
+char code printwheel2ASCII[97] = {
+// SP   a    n    r    m    c    s    d    h    l    f    k    ,    V    _    G
+  0x20,0x61,0x6E,0x72,0x6D,0x63,0x73,0x64,0x68,0x6C,0x66,0x6B,0x2C,0x56,0x2D,0x47,
+// U    F    B    Z    H    P    )    R    L    S    N    C    T    D    E    I   
+  0x55,0x46,0x42,0x5A,0x48,0x50,0x29,0x52,0x4C,0x53,0x4E,0x43,0x54,0x44,0x45,0x49,
+// A    J    O    (    M    .    Y    ,    /    W    9    K    3    X    1    2
+  0x41,0x4A,0x4F,0x28,0x4D,0x2E,0x59,0x2C,0x2F,0x57,0x39,0x4B,0x33,0x58,0x31,0x32,
+// 0    5    4    6    8    7    *    $    #    %    ¢    +    ±    @    Q    &
+  0x30,0x35,0x34,0x36,0x38,0x37,0x2A,0x24,0x23,0x25,0xA2,0x2B,0xB1,0x40,0x51,0x26,
+// ]    [    ³    ²    º    §    ¶    ½    ¼    !    ?    "    '    =    :    -
+  0x5D,0x5B,0xB3,0xB2,0xBA,0xA7,0xB6,0xBD,0xBC,0x21,0x3F,0x22,0x60,0x3D,0x3A,0x5F,
+// ;    x    q    v    z    w    j    .    y    b    g    u    p    i    t    o    e   
+  0x3B,0x78,0x71,0x76,0x7A,0x77,0x6A,0x2E,0x79,0x62,0x67,0x75,0x70,0x69,0x74,0x6F,0x65};
+
+  //--------------------------------------------------------------------------------------------------
+// 1 - resets the Function Board
+// 2 - resets the Printer Board
+// 3 - resets both boards
+//--------------------------------------------------------------------------------------------------
+void ww_reset(unsigned char board) {
+	unsigned char delay;
+	switch (board) {
+		case 1:																									// reset the function board
+			F_RESET = 1;                                    // Function Board reset on																					// turn on reset transistor for the function board
+			break;
+		case 2:																									// reset the printer board
+			P_RESET = 1;                                    // Printer Board reset on																					// turn on reset transistor for the printer board
+			break;
+		default:																								// reset both boards
+			P_RESET = 1;                        			// Printer Board reset on
+            F_RESET = 1;                        			// Function Board reset on
+	}
+	for(delay=0;delay<110;++delay);     					// ~1 mSec delay
+  P_RESET = 0;                        						// Printer Board reset off
+  F_RESET = 0;                        						// Function Board reset off
+}	
 
 //------------------------------------------------------------------------------------------------
 // backspace, no erase. decreases micro space count by uSpacesPerChar.
@@ -226,218 +253,150 @@ void ww_micro_down(void) {
 // Increases the micro space count by uSpacesPerChar for each letter printed.
 //-----------------------------------------------------------
 void ww_print_letter(unsigned char letter,attribute) {
-    if ((letter > 0x1F) && (letter < 0xC0)) {                   // "letter" must be a printable character
+    if ((letter > 0x1F)&&(letter < 0xC0)) {                 // "letter" must be a printable character
         amberLED = ON;
         send_to_printer_board_wait(0x121);
         send_to_printer_board_wait(0x003);
         send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);// ascii character (-0x20) as index to printwheel table    
         if ((attribute & 0x06) && ((letter!=0x20) || (attribute & 0x02))){// if underlining AND the letter is not a space OR continuous underlining is on
-            send_to_printer_board_wait(0x000);                  // advance zero micro spaces
+            send_to_printer_board_wait(0x000);              // advance zero micro spaces
             send_to_printer_board_wait(0x121);
             send_to_printer_board_wait(0x003);
-            send_to_printer_board_wait(0x04F);                  // print '_' underscore
+            send_to_printer_board_wait(0x04F);              // print '_' underscore
         }
-        if (attribute & 0x01) {                                 // if the bold bit is set   
-            send_to_printer_board_wait(0x001);                  // advance carriage by one micro space
+        if (attribute & 0x01) {                             // if the bold bit is set   
+            send_to_printer_board_wait(0x001);              // advance carriage by one micro space
             send_to_printer_board_wait(0x121);
             send_to_printer_board_wait(0x003);
             send_to_printer_board_wait(ASCII2printwheel[letter-0x20]);// re-print the character offset by one micro space
-            send_to_printer_board_wait((uSpacesPerChar)-1);     // advance carriage the remaining micro spaces
+            send_to_printer_board_wait((uSpacesPerChar)-1); // advance carriage the remaining micro spaces
         } 
         else { // not boldprint
             send_to_printer_board_wait(uSpacesPerChar);      
         }
-        uSpaceCount += uSpacesPerChar;                          // update the micro space count
-        if (uSpaceCount > 1319) {                               // 1 inch from right stop   
-            ww_carriage_return();
+        
+        uSpaceCount += uSpacesPerChar;                      // update the micro space count
+        if (uSpaceCount > 1450) {                           // right stop   
+            ww_carriage_return();                           // automatically return to left margin
+            column = 1;
         }
+        
         amberLED = OFF;
     }
 }
 
-#define FIFTEENCPI 8                                        // number of micro spaces for each character on the 15P printwheel (15 cpi)
-#define TWELVECPI 10                                        // number of micro spaces for each character on the 12P printwheel (12 cpi)
-#define TENCPI 12                                           // number of micro spaces for each character on the 10P printwheel (10 cpi)
-//------------------------------------------------------------------------------------------------
-// set micro spaces per character and micro lines per line values according to the printwheel in use
-// microspace = 1/120th inch, micro line = 1/96th inch
-//------------------------------------------------------------------------------------------------
-void ww_set_printwheel(unsigned char pw) {
-    switch(pw) {
-        case FIFTEENCPI:                                    // 15P printwheel (15 cpi)
-            uSpacesPerChar = 8;                             // 8 micro spaces/character
-            uLinesPerLine = 12;                             // 12 micro lines/full line
-            break;
-        case TWELVECPI:                                     // 12P printwheel (12 cpi)
-            uSpacesPerChar = 10;                            // 10 micro spaces/character
-            uLinesPerLine = 16;                             // 16 micro lines/full line
-            break;
-        case TENCPI:                                        // 10P printwheel (10 cpi)
-            uSpacesPerChar = 12;                            // 12 micro spaces/character
-            uLinesPerLine = 16;                             // 16 micro lines/full line
-            break;
-        default:
-            uSpacesPerChar = 10;                            // 10 micro spaces/character
-            uLinesPerLine = 16;                             // 16 micro lines/full line
-    }
-}
-
 //--------------------------------------------------------------------------------------------------
-// decodes the 9 bit words received from the Wheelwriter Function Board on the BUS when keys are
-// pressed and returns the equivalent ASCII character (if there is one). typically a sequence of a 
+// Decodes the 9 bit words received from the Wheelwriter Function Board on the BUS when keys are
+// pressed and returns the equivalent ASCII character (if there is one). Typically a sequence of a 
 // minimum of three words (sometimes more, depending on the key) is required to decode each keypress.
 // Call this function for each word received from the Function Board. Intermediate words return zeros.
 //--------------------------------------------------------------------------------------------------
 char ww_decode_keys(unsigned int WWdata) {
-    static char keystate = 0;
-    static char asciiValue = 0;
+    static unsigned char keystate = 0xFF;
+    static unsigned int lastWWdata = 0;
     char result;
 
     result = 0;
     switch(keystate) {
-        case 0:                                             // waiting for first data word from Wheelwriter...
+        case 0xFF:                                          // waiting for first data word from Wheelwriter...
             if (WWdata == 0x121)                            // all commands must start with 0x121...
-               keystate = 1;
+               keystate = 0xFE;
             break;
-        case 1:                                             // 0x121 has been received...
+        case 0xFE:                                          // 0x121 has been received...
             switch(WWdata) {
                 case 0x003:                                 // 0x121,0x003 is start of alpha-numeric character sequence
-                    keystate = 2;
-                    break;
-                case 0x004:                                 // 0x121,0x004 is start of erase sequence
-                    keystate = 0;
-                    result = BS;   
+                    keystate = 0x03;
                     break;
                 case 0x005:                                 // 0x121,0x005 is start of vertical movement sequence
-                    keystate = 6;
+                    keystate = 0x05;
                     break;          
                 case 0x006:                                 // 0x121,0x006 is start of horizontal movement sequence
-                    keystate = 3;
+                    keystate = 0x06;
                     break;
                 case 0x00E:                                 // 0x121,0x00E is the start of a code key sequence
-                    keystate = 7;
+                    keystate = 0x0E;
                     break;
                 default:
-                    keystate = 0;
-        } // switch(WWdata)
+                    keystate = 0xFF;
+            } // switch(WWdata)
             break;
-        case 2:                                             // 0x121,0x003 has been received...          
-            keystate = 8;                                   // must wait for the microspaces value to follow
-            if (WWdata)                                     // 0x121,0x003,<printwheel code>
-               asciiValue = printwheel2ASCII[(WWdata-1)];   // get the ASCII code from the table
-            else
-               asciiValue = SP;                             // else, 0x121,0x003,0x000 is the sequence for SPACE
+        case 0x03:                                          // 0x121,0x003 has been received...          
+            keystate = 0x31;                                // must wait for the microspaces value to follow
             break;
-        case 3:                                             // 0x121,0x006 has been received...
+        case 0x31:                                          // 0x121,0x003,printwheel code  has been received, waiting for microspaces...      
+            keystate = 0xFF;                                // reset keystate back to start    
+            result = printwheel2ASCII[(lastWWdata)];        // get the ASCII code from the table
+            break;
+        case 0x05:                                          // 0x121,0x005 has been received, move paper vertically...
+            keystate = 0xFF;
+            if (((WWdata&0x1F)==uLinesPerLine)&&(WWdata&0x80))// one line AND paper up direction
+                    result = CR;                            // LF used to detect when C Rtn key is pressed
+            else {
+                send_to_printer_board_wait(0x121);          // pass all other vertical commands thru...
+                send_to_printer_board_wait(0x005);          // Paper Up, Paper Down, Micro Up, Micro Down and SAPI
+                send_to_printer_board_wait(WWdata);
+            }
+            break;
+        case 0x06:                                          // 0x121,0x006 has been received...
             if (WWdata & 0x080)                             // if bit 7 is set...         
-               keystate = 4;                                // 0x121,0x006,0x080 is horizontal movement to the right...
+               keystate = 0x61;                             // 0x121,0x006,0x080 is horizontal movement to the right...
             else                                            // else...
-               keystate = 5;                                // 0x121,0x006,0x000 is horizontal movement to the left...
+               keystate = 0x62;                             // 0x121,0x006,0x000 is horizontal movement to the left...
             break;
-        case 4:                                             // 0x121,0x006,0x080 has been received, move carrier to the right...
-            keystate = 0;
-            if (WWdata>uSpacesPerChar)                      // if more than one space, must be horizontal tab
+        case 0x61:                                          // 0x121,0x006,0x08X has been received, move carrier to the right...
+            keystate = 0xFF;
+            if ((WWdata>uSpacesPerChar)&&(WWdata<uSpacesPerChar*10)) // if more than one space but less than 10 spaces, must be horizontal tab
                 result = HT;
-            else 
+            else if (WWdata==uSpacesPerChar)
                 result = SP;
             break;
-        case 5:                                             // 0x121,0x006,0x000 has been received, move carrier to the left...
-            keystate = 0;
-            if (WWdata == uSpacesPerChar) 
-               result = BS;
+        case 0x62:                                          // 0x121,0x006,0x00X has been received, move carrier to the left...
+            keystate = 0xFF;
+            /*if (((lastWWdata&0x007)==(uSpaceCount>>8))&&(WWdata==(uSpaceCount&0xFF)))
+                result = CR;                                // instead, use the linefeed emitted when key is pressed to detect C Rtn (see above)
+            else */                                         
+            if (WWdata==uSpacesPerChar) 
+                result = BS;
             break;
-        case 6:                                             // 0x121,0x005 has been received, move paper vertically...
-            keystate = 0;
-            if ((WWdata&0x1F) == uLinesPerLine)
-               result = CR;                                 // 0x121,0x005,0x090 is the sequence for paper up one line (for 10P, 12P and PS printwheels)
-            break;
-        case 7:                                             // 0x121,0x00E has ben received (code key combination)
-            keystate = 0;
+        case 0x0E:                                          // 0x121,0x00E has been received (code key combination)
+            keystate = 0xFF;
             // convert code key combinations into control keys i.e. code c is converted into control c
-            switch(WWdata & 0x17F) {// bit 7 is cleared on WW3, set on WW6
-                case 0x002:	        // Code Q
-                    result = DC1;   // converted to Control Q
+            switch(WWdata & 0x07F) {                        // bit 7 is cleared on WW3, set on WW6
+                case 0x006:	                                // Code+Z
+                    result = SUB;                           // converted to ^Z
                     break;
-                case 0x004:	        // Code A
-                    result = SOH;   // converted to Control A
+                case 0x016:	                                // Code+C
+                    result = ETX;                           // converted to ^C
                     break;
-                case 0x006:	        // Code Z
-                    result = SUB;   // converted to Control Z
+                case 0x01D:	                                // Code+G
+                    result = BEL;                           // converted to ^G
                     break;
-                case 0x00A:	        // Code W
-                    result = ETB;   // converted to Control W
+                case 0x024:	                                // Code+J
+                    result = LF;                            // converted to ^J
                     break;
-                case 0x00C:	        // Code S
-                    result = DC3;   // converted to Control S
+                case 0x025:	                                // Code+H
+                    result = BS;                            // converted to ^H
                     break;
-                case 0x00E:	        // Code X
-                    result = CAN;   // converted to Control X
+                case 0x026:	                                // Code+M
+                    result = CR;                            // converted to ^M
                     break;
-                case 0x012:	        // Code E
-                    result = ENQ;   // converted to Control E
+                case 0x02A:	                                // Code+I
+                    result = HT;                            // converted to ^I
                     break;
-                case 0x014:	        // Code D
-                    result = EOT;   // converted to Control D
+                case 0x02C:	                                // Code+K
+                    result = VT;                            // converted to ^K
                     break;
-                case 0x016:	        // Code C
-                    result = ETX;   // converted to Control C
+                case 0x034:	                                // Code+L
+                    result = FF;                            // converted to ^L
                     break;
-                case 0x01A:	        // Code R
-                    result = DC2;   // converted to Control R
-                    break;
-                case 0x01B:	        // Code T
-                    result = DC4;   // converted to Control T
-                    break;
-                case 0x01C:	        // Code F
-                    result = ACK;   // converted to Control F
-                    break;
-                case 0x01D:	        // Code G
-                    result = BEL;   // converted to Control G
-                    break;
-                case 0x01E:	        // Code V
-                    result = SYN;   // converted to Control V
-                    break;
-                case 0x01F:	        // Code B
-                    result = STX;   // converted to Control B
-                    break;
-                case 0x022:	        // Code U
-                    result = NAK;   // converted to Control U
-                    break;
-                case 0x023:	        // Code Y
-                    result = EM;    // converted to Control Y
-                    break;
-                case 0x024:	        // Code J
-                    result = LF;    // converted to Control J
-                    break;
-                case 0x025:	        // Code H
-                    result = BS;    // converted to Control H
-                    break;
-                case 0x026:	        // Code M
-                    result = CR;    // converted to Control M
-                    break;
-                case 0x02A:	        // Code I
-                    result = HT;    // converted to Control I
-                    break;
-                case 0x02C:	        // Code K
-                    result = VT;    // converted to Control K
-                    break;
-                case 0x032:	        // Code O
-                    result = SI;    // converted to Control O
-                    break;
-                case 0x03A:	        // Code P
-                    result = DLE;   // converted to Control P
-                    break;
-                case 0x072:	        // Code N
-                    result = SO;    // converted to Control N
-                    break;
+                case 0x048:                                 // Code+Mar Rel
+                    result = ESC;                           // converted to Escape
+                    break;                                  
+                case 0x4F:                                  // Code+Erase
+                    result = 0xFF;                          // return 0xFF for Code+Erase key combo
             } // switch(WWdata & 0x17F)
             break;
-        case 8:                                                 // 0x121,0x003,printwheel code  has been received, waiting for microspaces...      
-            keystate = 0;                                       // reset keystate back to zero    
-            result = asciiValue;                                // return the ASCII equivalent to the printwheel code
-            break;
     }   // switch(keystate)
+    lastWWdata = WWdata;                                    // save for next time
     return(result);
 }
-
-    

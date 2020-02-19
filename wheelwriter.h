@@ -12,6 +12,5 @@ void ww_paper_up(void);
 void ww_paper_down(void);
 void ww_micro_up(void);
 void ww_micro_down(void);
-void ww_set_printwheel(unsigned char pw);
 char ww_decode_keys(unsigned int WWdata);
-   
+void ww_reset(char board);

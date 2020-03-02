@@ -53,7 +53,9 @@ unsigned char attribute = 0;            // bit 0=bold, bit 1=continuous underlin
 unsigned char column = 1;               // current print column (1=left margin)
 unsigned char tabStop = 5;              // horizontal tabs every 5 spaces (every 1/2 inch)
 volatile unsigned char timeout = 0;     // decremented every 50 milliseconds, used for detecting timeouts
-volatile unsigned long upTime = 0;      // uptime in seconds
+volatile unsigned char hours = 0;       // uptime hours
+volatile unsigned char minutes = 0;     // uptime minutes
+volatile unsigned char seconds = 0;     // uptime seconds
 
 extern unsigned char uSpacesPerChar;    // defined in wheelwriter.c
 extern unsigned char uLinesPerLine;     // defined in wheelwriter.c
@@ -61,10 +63,10 @@ extern unsigned char uLinesPerLine;     // defined in wheelwriter.c
 // uninitialized variables in xdata RAM, contents unaffected by reset
 unsigned char xdata wdResets _at_ 0x3F0;// count of watchdog resets
 
-code char title[]     = "Wheelwriter Teletype Version 1.3.0";
-code char mcu[]       = "for STCmicro IAP15W4K61S4 MCU";
-code char compiled[]  = "Compiled on " __DATE__ " at " __TIME__;
-code char copyright[] = "Copyright 2019-2020 Jim Loos";
+code char banner[]    = "Wheelwriter Teletype Version 1.3.0\n"
+                        "for STCmicro IAP15W4K61S4 MCU\n"
+                        "Compiled on " __DATE__ " at " __TIME__"\n"
+                        "Copyright 2019-2020 Jim Loos\n";
 
 code char help1[]     = "\n\nControl characters:\n"
                         "BEL 0x07        spins the printwheel\n"
@@ -75,7 +77,7 @@ code char help1[]     = "\n\nControl characters:\n"
                         "CR  0x0D        returns carriage to left margin\n"
                         "ESC 0x1B        see Diablo 630 commands below...\n"
                         "\nDiablo 630 commands emulated:\n"
-                        "<ESC><O>        selects bold printing for one line\n"
+                        "<ESC><O>        selects bold printing\n"
                         "<ESC><&>        cancels bold printing\n"
                         "<ESC><E>        selects continuous underlining\n"
                         "<ESC><R>        cancels underlining\n"
@@ -124,7 +126,18 @@ void timer0_isr(void) interrupt 1 using 1{
 
     if(++ticks == 20) { 		    // if 20 ticks (one second) have elapsed...
         ticks = 0;
-        ++upTime;
+
+        if (errorLED) {             // if there's an error 
+           redLED = !redLED;        // toggle the red LED once each second
+        }
+
+        if (++seconds == 60) {		// if 60 seconds (one minute) has elapsed...
+            seconds = 0;
+            if (++minutes == 60) {	// if 60 minutes (one hour) has elapsed...
+                minutes = 0;
+                ++hours;
+            }
+        }
     }
 }
 
@@ -144,7 +157,7 @@ void timer0_isr(void) interrupt 1 using 1{
 //  ESC 0x1B    see Diablo 630 commands below...
 //
 // Diablo 630 commands emulated:
-//  <ESC><O>    selects bold printing for one line
+//  <ESC><O>    selects bold printing
 //  <ESC><&>    cancels bold printing
 //  <ESC><E>    selects continuous underlining  (spaces between words are underlined) for one line
 //  <ESC><R>    cancels underlining
@@ -177,7 +190,6 @@ void timer0_isr(void) interrupt 1 using 1{
 void print_char_on_WW(unsigned char charToPrint) {
     static unsigned char escape = 0;                          // escape sequence state
     unsigned char i,t;
-    unsigned int d,h,m,s;
 
     switch(escape) {
         case 0:
@@ -209,6 +221,7 @@ void print_char_on_WW(unsigned char charToPrint) {
                     break;
                 case VT:
                     ww_linefeed();
+                    putchar(LF);                
                     break;
                 case CR:
                     ww_carriage_return();                   // return the carrier to the left margin
@@ -263,21 +276,21 @@ void print_char_on_WW(unsigned char charToPrint) {
                     attribute |= 0x04;
                     break;
                 case 'e':                                   // <ESC><e> selects Elite (12 characters/inch)
-                    uSpacesPerChar = 10;                            // 10 micro spaces/character
-                    uLinesPerLine = 16;                             // 16 micro lines/full line
+                    uSpacesPerChar = 10;                    // 10 micro spaces/character
+                    uLinesPerLine = 16;                     // 16 micro lines/full line
                     tabStop = 6;                            // tab stops every 6 characters (every 1/2 inch)
                     break;
                 case 'l':                                   // <ESC><l> selects auto linefeed, the next character turns it on or off
                     escape = 5;
                     break;
                 case 'p':                                   // <ESC><p> selects Pica (10 characters/inch)
-                    uSpacesPerChar = 12;                            // 10 micro spaces/character
-                    uLinesPerLine = 16;                             // 16 micro lines/full line
+                    uSpacesPerChar = 12;                    // 10 micro spaces/character
+                    uLinesPerLine = 16;                     // 16 micro lines/full line
                     tabStop = 5;                            // tab stops every 5 characters (every 1/2 inch)
                     break;
                 case 'm':                                   // <ESC><m> selects Micro Elite (15 characters/inch)
-                    uSpacesPerChar = 8;                            // 10 micro spaces/character
-                    uLinesPerLine = 12;                             // 16 micro lines/full line
+                    uSpacesPerChar = 8;                     // 10 micro spaces/character
+                    uLinesPerLine = 12;                     // 16 micro lines/full line
                     tabStop = 7;                            // tab stops every 7 characters (every 1/2 inch)
                     break;
                 case 'u':                                   // <ESC><u> paper micro up (paper up 1/8 line)
@@ -300,7 +313,7 @@ void print_char_on_WW(unsigned char charToPrint) {
             escape = 0;
             switch(charToPrint) {
                 case 'a':
-                    printf("\n%s\n%s\n%s\n%s\n\n",title,mcu,compiled,copyright);
+                    printf("\n%s\n",banner);
                     break;
                 case 'c':                                   // <ESC><^Z><c> print current column
                     printf("%s %u\n","Column:",(int)column);
@@ -324,11 +337,7 @@ void print_char_on_WW(unsigned char charToPrint) {
                 case 't':
                     break;
                 case 'u':                                   // <ESC><^Z><u> print uptime
-                    d = upTime/86400;                       // days (not displayed)
-                    h = (upTime%86400)/3600;                // hours
-                    m = (upTime%3600)/60;                   // minutes
-                    s = upTime%60;                          // seconds
-                    printf("%s %02d%c%02d%c%02d\n","Uptime:",h,':',m,':',s);
+                    printf("%s %02u%c%02u%c%02u\n","Uptime:",(int)hours,':',(int)minutes,':',(int)seconds);
                     break;
                 case 'w':                                   // <ESC><^Z><w> print watchdog resets
                     printf("%s %d\n","Watch Dog Timer resets:",(int)wdResets);
@@ -415,8 +424,6 @@ void main(void){
     unsigned char state = 0;
     unsigned char wwKey,ch;
     unsigned long lastsec = 0;
-    bit ignoreNextTab = FALSE;                                  // ignore TAB emitted when Function Board is reset
-    bit ignoreNextSpace = FALSE;                                // ignore SPACE emitted when WW6 Function Board is reset
     bit typewriter = TRUE;                                      // when true wheelwriter keystrokes go to wheelwriter, when false wheelwriter keystrokes go to serial console
 
     // from the data sheet:
@@ -438,7 +445,7 @@ void main(void){
 
 	EA = TRUE;                     	                            // global interrupt enable
 
-    printf("\n%s\n%s\n%s\n%s\n\n",title,mcu,compiled,copyright);
+    printf("\n%s\n",banner);
     if (POF) {
         printf ("Power-on reset\n");
         wdResets = 0;
@@ -450,7 +457,7 @@ void main(void){
     }
 
     printf("Initializing");
-    lastsec = upTime;
+    lastsec = seconds;
 	ww_reset(3);																								// reset both boards
     WDT_CONTR |= 0x06;                                          // 4551.1 mS overflow
     ENABLE_WDT;                                                 // run watch dog timer                                        // run watch dog timer
@@ -458,8 +465,8 @@ void main(void){
 
     //////////// determine the pitch of the printwheel /////////////
     while(!printwheel && timeout) {                             // loop for 7 seconds or until the printer board replies to 0x121,0x001...
-        if (lastsec != upTime) {                                // once each second...
-            lastsec = upTime;
+        if (lastsec != seconds) {                                // once each second...
+            lastsec = seconds;
             putchar('.');
             RESET_WDT;                                          // reset watch dog timer every second
         }
@@ -489,8 +496,8 @@ void main(void){
     //////////// relay the initialization commands from Function to Printer board /////////////
     timeout = ONESEC;                                           // empirically determined 1 second is adequate
     while(timeout) {                                            // once each second
-        if (lastsec != upTime) {
-            lastsec = upTime;
+        if (lastsec != seconds) {
+            lastsec = seconds;
             putchar('.');
             RESET_WDT;                                          // reset watch dog timer every second
         }
@@ -596,7 +603,7 @@ void main(void){
 
             wwKey = ww_decode_keys(function_board_cmd);         // convert the function board keystroke cmd into ASCII character
             if (wwKey) {                                        // if it's a valid ASCII key...
-                if (wwKey == 0xFF) {                            // is it Code+Erase key combo?
+                if (wwKey == 0xF0) {                            // is it Code+Erase key combo?
                     if (column == 1) {                          // carrier must be at left margin to change modes
                         typewriter = !typewriter;               // toggle the typewriter/keyboard flag
                         ww_spin();

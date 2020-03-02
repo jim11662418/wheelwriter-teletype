@@ -14,6 +14,14 @@
 #define TRUE  1
 
 #define RBUFSIZE3 16
+#if RBUFSIZE3 < 4
+#error RBUFSIZE3 is too small. RBUFSIZE3 may not be less than 4.
+#elif RBUFSIZE3 > 128
+#error RBUFSIZE3 is too large. RBUFSIZE3 may not be greater than 128.
+#elif ((RBUFSIZE3 & (RBUFSIZE3-1)) != 0)
+#error RBUFSIZE3 must be a power of 2.
+#endif
+
 volatile unsigned char data rx3_head;       	// receive interrupt index for UART3
 volatile unsigned char data rx3_tail;       	// receive read index for UART3
 volatile unsigned int xdata rx3_buf[RBUFSIZE3]; // receive buffer for UART3 1 in internal MOVX RAM

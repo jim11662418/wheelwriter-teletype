@@ -10,6 +10,14 @@
 #define TRUE  1
 
 #define RBUFSIZE4 16
+#if RBUFSIZE4 < 4
+#error RBUFSIZE4 is too small. RBUFSIZE4 may not be less than 4.
+#elif RBUFSIZE4 > 128
+#error RBUFSIZE4 is too large. RBUFSIZE4 may not be greater than 128.
+#elif ((RBUFSIZE4 & (RBUFSIZE4-1)) != 0)
+#error RBUFSIZE4 must be a power of 2.
+#endif
+
 volatile unsigned char data rx4_head;       	// receive interrupt index for serial 1
 volatile unsigned char data rx4_tail;       	// receive read index for serial 1
 volatile unsigned int xdata rx4_buf[RBUFSIZE4]; // receive buffer for serial 1 in internal MOVX RAM

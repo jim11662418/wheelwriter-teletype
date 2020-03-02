@@ -11,8 +11,15 @@
 #define TRUE  1
 
 #define FOSC 12000000L                          // 12 MHz system clock frequency
+#define RBUFSIZE2 256                           // must be 256,128,64 or 32 bytes
+#if RBUFSIZE2 < 4
+#error RBUFSIZE2 is too small. RBUFSIZE2 may not be less than 4.
+#elif RBUFSIZE2 > 256
+#error RBUFSIZE2 is too large. RBUFSIZE2 may not be greater than 256.
+#elif ((RBUFSIZE2 & (RBUFSIZE2-1)) != 0)
+#error RBUFSIZE2 must be a power of 2.
+#endif
 
-#define RBUFSIZE2 256                           // receive buffer for 256 bytes
 #define PAUSELEVEL RBUFSIZE2/4		            // pause communications to avoid overflow (RTS = 1) when buffer space < 64 bytes
 #define RESUMELEVEL RBUFSIZE2/2                 // resume communications (RTS = 0) when buffer space > 128 bytes
 
@@ -21,7 +28,7 @@ sbit RTS = P1^2;								// RTS output on pin 11
 volatile unsigned char data rx2_head;       	// receive interrupt index
 volatile unsigned char data rx2_tail;       	// receive read index
 volatile unsigned char rx2_remaining;		    // receive buffer space remaining
-volatile unsigned int xdata rx2_buf[RBUFSIZE2]; // receive buffer  in internal MOVX RAM
+volatile unsigned char xdata rx2_buf[RBUFSIZE2]; // receive buffer  in internal MOVX RAM
 volatile bit tx2_ready;                         // set when ready to transmit
 
 // ---------------------------------------------------------------------------
@@ -45,7 +52,6 @@ void uart2_isr(void) interrupt 8 using 3 {
           		RTS = 1;						// pause communications when space in UART2 buffer decreases to less than 64 bytes
        		}
     	}
-
     }   
 }
 

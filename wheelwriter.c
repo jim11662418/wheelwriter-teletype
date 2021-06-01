@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <reg51.h>
 #include <stc51.h>
-#include "uart3.h"
-#include "uart4.h"
+#include "ww-uart3.h"
+#include "ww-uart4.h"
 #include "control.h"
 
 #define FALSE 0
@@ -11,6 +11,7 @@
 #define OFF 1                                   // 1 turns the amber LED off
 
 extern unsigned char column;                    // defined in main.c
+extern bit typewriter;                          // defined in main.c
 
 sbit P_RESET  = P0^4;                   		// Power-On-Reset for Printer Board output pin 5 0=on, 1=off
 sbit F_RESET  = P1^4;                   		// Power-On-Reset for Function Board output pin 13 0=on, 1=off
@@ -51,7 +52,7 @@ char code ASCII2printwheel[160] =
        0x44, 0x3C, 0x42, 0x43, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x47, 0x00, 0x00};// B0
 
 //------------------------------------------------------------------------------------------------
-// convert printwheel character codes to ASCII
+// Wheelwriter printwheel to ASCII translation table
 //------------------------------------------------------------------------------------------------
 char code printwheel2ASCII[97] = {
 // SP   a    n    r    m    c    s    d    h    l    f    k    ,    V    _    G
@@ -67,7 +68,8 @@ char code printwheel2ASCII[97] = {
 // ;    x    q    v    z    w    j    .    y    b    g    u    p    i    t    o    e   
   0x3B,0x78,0x71,0x76,0x7A,0x77,0x6A,0x2E,0x79,0x62,0x67,0x75,0x70,0x69,0x74,0x6F,0x65};
 
-  //--------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
 // 1 - resets the Function Board
 // 2 - resets the Printer Board
 // 3 - resets both boards
@@ -86,8 +88,8 @@ void ww_reset(unsigned char board) {
             F_RESET = 1;                        			// Function Board reset on
 	}
 	for(delay=0;delay<110;++delay);     					// ~1 mSec delay
-  P_RESET = 0;                        						// Printer Board reset off
-  F_RESET = 0;                        						// Function Board reset off
+    P_RESET = 0;                        					// Printer Board reset off
+    F_RESET = 0;                        					// Function Board reset off
 }	
 
 //------------------------------------------------------------------------------------------------
@@ -280,16 +282,24 @@ void ww_print_letter(unsigned char letter,attribute) {
             ww_carriage_return();                           // automatically return to left margin
             column = 1;
         }
-        
         amberLED = OFF;
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-// Decodes the 9 bit words received from the Wheelwriter Function Board on the BUS when keys are
-// pressed and returns the equivalent ASCII character (if there is one). Typically a sequence of a 
+// Decodes the 9 bit words sent by the Wheelwriter Function Board (on the BUS) when keys are pressed
+// and returns the equivalent ASCII character (if there is one). Typically a sequence of a 
 // minimum of three words (sometimes more, depending on the key) is required to decode each keypress.
 // Call this function for each word received from the Function Board. Intermediate words return zeros.
+//
+// In "Typewriter" Mode, sends vertical movement commands (Paper Up, Paper Down, Micro Up, Micro
+// Down and SAPI) to the Wheelwriter. Vertical movement commands ignored when not in typewriter mode.
+//
+// Horizontal movement commands are returned as Space, Backspace and Tab characters.
+//
+// Code key combinations are returned as control keys i.e. Code C is returned as Control C.
+//
+// The Code Erase key combo returns 0xF0.
 //--------------------------------------------------------------------------------------------------
 char ww_decode_keys(unsigned int WWdata) {
     static unsigned char keystate = 0xFF;
@@ -329,12 +339,15 @@ char ww_decode_keys(unsigned int WWdata) {
             break;
         case 0x05:                                          // 0x121,0x005 has been received, move paper vertically...
             keystate = 0xFF;
-            if (((WWdata&0x1F)==uLinesPerLine)&&(WWdata&0x80))// one line AND paper up direction
-                    result = CR;                            // LF used to detect when C Rtn key is pressed
+            if (((WWdata&0x1F)==uLinesPerLine)&&(WWdata&0x80)){// one line AND paper up direction
+                result = CR;                                // LF used to detect when C Rtn key is pressed
+            }                
             else {
-                send_to_printer_board_wait(0x121);          // pass all other vertical commands thru...
-                send_to_printer_board_wait(0x005);          // Paper Up, Paper Down, Micro Up, Micro Down and SAPI
-                send_to_printer_board_wait(WWdata);
+                if (typewriter) {                           // if typewriter mode...
+                    send_to_printer_board_wait(0x121);      // pass all other vertical commands thru...
+                    send_to_printer_board_wait(0x005);      // Paper Up, Paper Down, Micro Up, Micro Down and SAPI
+                    send_to_printer_board_wait(WWdata);
+                }
             }
             break;
         case 0x06:                                          // 0x121,0x006 has been received...
@@ -393,7 +406,7 @@ char ww_decode_keys(unsigned int WWdata) {
                     result = ESC;                           // converted to Escape
                     break;                                  
                 case 0x4F:                                  // Code+Erase
-                    result = 0xFF;                          // return 0xFF for Code+Erase key combo
+                    result = 0xF0;                          // return 0xFF for Code+Erase key combo
             } // switch(WWdata & 0x17F)
             break;
     }   // switch(keystate)

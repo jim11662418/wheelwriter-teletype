@@ -10,16 +10,15 @@
 #define ON 0                                    // 0 turns the amber LED on
 #define OFF 1                                   // 1 turns the amber LED off
 
+extern unsigned char uSpacesPerChar;            // defined in main.c
+extern unsigned char uLinesPerLine;             // defined in main.c    
+extern unsigned int  uSpaceCount;               // defined in main.c
 extern unsigned char column;                    // defined in main.c
 extern bit typewriter;                          // defined in main.c
 
 sbit P_RESET  = P0^4;                   		// Power-On-Reset for Printer Board output pin 5 0=on, 1=off
 sbit F_RESET  = P1^4;                   		// Power-On-Reset for Function Board output pin 13 0=on, 1=off
 sbit amberLED = P0^6;                           // amber LED connected to pin 6 0=on, 1=off
-
-unsigned char uSpacesPerChar = 10;              // micro spaces per character (8 for 15cpi, 10 for 12cpi and PS, 12 for 10cpi)
-unsigned char uLinesPerLine = 16;               // micro lines per line (12 for 15cpi; 16 for 10cpi, 12cpi and PS)
-unsigned int  uSpaceCount = 0;                  // number of micro spaces on the current line (for carriage return)
 
 //------------------------------------------------------------------------------------------------
 // ASCII to Wheelwriter printwheel translation table
@@ -315,42 +314,39 @@ char ww_decode_keys(unsigned int WWdata) {
         case 0xFE:                                          // 0x121 has been received...
             switch(WWdata) {
                 case 0x003:                                 // 0x121,0x003 is start of alpha-numeric character sequence
-                    keystate = 0x03;
+                    keystate = 0x30;
                     break;
                 case 0x005:                                 // 0x121,0x005 is start of vertical movement sequence
-                    keystate = 0x05;
+                    keystate = 0x50;
                     break;          
                 case 0x006:                                 // 0x121,0x006 is start of horizontal movement sequence
-                    keystate = 0x06;
+                    keystate = 0x60;
                     break;
                 case 0x00E:                                 // 0x121,0x00E is the start of a code key sequence
-                    keystate = 0x0E;
+                    keystate = 0xE0;
                     break;
                 default:
-                    keystate = 0xFF;
+                    keystate = 0xFF;                        // anything else
             } // switch(WWdata)
             break;
-        case 0x03:                                          // 0x121,0x003 has been received...          
+        case 0x30:                                          // 0x121,0x003 has been received...          
             keystate = 0x31;                                // must wait for the microspaces value to follow
             break;
         case 0x31:                                          // 0x121,0x003,printwheel code  has been received, waiting for microspaces...      
             keystate = 0xFF;                                // reset keystate back to start    
             result = printwheel2ASCII[(lastWWdata)];        // get the ASCII code from the table
             break;
-        case 0x05:                                          // 0x121,0x005 has been received, move paper vertically...
+        case 0x50:                                          // 0x121,0x005 has been received, move paper vertically...
             keystate = 0xFF;
-            if (((WWdata&0x1F)==uLinesPerLine)&&(WWdata&0x80)){// one line AND paper up direction
+            if (((WWdata&0x1F)==uLinesPerLine)&&(WWdata&0x80))// one line AND paper up direction
                 result = CR;                                // LF used to detect when C Rtn key is pressed
-            }                
-            else {
-                if (typewriter) {                           // if typewriter mode...
-                    send_to_printer_board_wait(0x121);      // pass all other vertical commands thru...
-                    send_to_printer_board_wait(0x005);      // Paper Up, Paper Down, Micro Up, Micro Down and SAPI
-                    send_to_printer_board_wait(WWdata);
-                }
+            if (typewriter) {                               // if typewriter mode...
+                send_to_printer_board_wait(0x121);          // pass all vertical commands thru...
+                send_to_printer_board_wait(0x005);          // Paper Up, Paper Down, Micro Up, Micro Down and SAPI
+                send_to_printer_board_wait(WWdata);
             }
             break;
-        case 0x06:                                          // 0x121,0x006 has been received...
+        case 0x60:                                          // 0x121,0x006 has been received...
             if (WWdata & 0x080)                             // if bit 7 is set...         
                keystate = 0x61;                             // 0x121,0x006,0x080 is horizontal movement to the right...
             else                                            // else...
@@ -371,7 +367,7 @@ char ww_decode_keys(unsigned int WWdata) {
             if (WWdata==uSpacesPerChar) 
                 result = BS;
             break;
-        case 0x0E:                                          // 0x121,0x00E has been received (code key combination)
+        case 0xE0:                                          // 0x121,0x00E has been received (code key combination)
             keystate = 0xFF;
             // convert code key combinations into control keys i.e. code c is converted into control c
             switch(WWdata & 0x07F) {                        // bit 7 is cleared on WW3, set on WW6

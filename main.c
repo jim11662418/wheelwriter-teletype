@@ -54,26 +54,26 @@ bit autoCarriageReturn = FALSE;         // when true, automatically print a carr
 bit errorLED = FALSE;                   // makes the red LED flash when TRUE
 bit initializing = TRUE;                // makes all three LEDs flash during initialization
 bit monitor = FALSE;                    // monitor communications between function and printer boards
+bit typewriter = TRUE;                  // when true wheelwriter keystrokes go to wheelwriter, when false wheelwriter keystrokes go to serial console
 
 unsigned char attribute = 0;            // bit 0=bold, bit 1=continuous underline, bit 2=multiple word underline
 unsigned char column = 1;               // current print column (1=left margin)
 unsigned char tabStop = 5;              // horizontal tabs every 5 spaces (every 1/2 inch)
 unsigned char printWheel = 0;           // 10pt, 12pt, 15pt or PS
+unsigned char uSpacesPerChar = 10;      // micro spaces per character (8 for 15cpi, 10 for 12cpi and PS, 12 for 10cpi)
+unsigned char uLinesPerLine = 16;       // micro lines per line (12 for 15cpi; 16 for 10cpi, 12cpi and PS)
+unsigned int  uSpaceCount = 0;          // number of micro spaces on the current line (for carriage return)
 
 volatile unsigned char timeout = 0;     // decremented every 50 milliseconds, used for detecting timeouts
 volatile unsigned char hours = 0;       // uptime hours
 volatile unsigned char minutes = 0;     // uptime minutes
 volatile unsigned char seconds = 0;     // uptime seconds
 
-extern unsigned char uSpacesPerChar;    // defined in wheelwriter.c
-extern unsigned char uLinesPerLine;     // defined in wheelwriter.c
-extern unsigned int  uSpaceCount;       // defined in wheelwriter.c
-
 // uninitialized variables in xdata RAM, contents unaffected by reset
 unsigned char xdata wdResets         _at_ 0xEF0; // count of watchdog resets
 unsigned char xdata softResetFlag    _at_ 0xEF1; // flag set on software reset
 
-code char about[] = "Wheelwriter Teletype Version 1.3.0\n"
+code char about[] = "Wheelwriter Teletype Version 1.3.1\n"
                     "for STCmicro IAP15W4K61S4 MCU\n"
                     "Compiled on " __DATE__ " at " __TIME__"\n"
                     "Copyright 2019-2020 Jim Loos\n";
@@ -244,7 +244,7 @@ void print_char_on_WW(unsigned char charToPrint) {
                     putchar(CR);
                     break;
                 case ESC:
-                    escape = 1;
+                    escape = 1;                             // ESCAPE character detected, next state
                     break;
                 default:
                     ww_print_letter(charToPrint,attribute);
@@ -434,7 +434,6 @@ void main(void){
     unsigned char state = 0;
     unsigned char wwKey,ch;
     unsigned long lastsec = 0;
-    bit typewriter = TRUE;                                      // when true wheelwriter keystrokes go to wheelwriter, when false wheelwriter keystrokes go to serial console
 
     // from the data sheet:
     // After power-up, all PWM-related I/O ports on the IAP15W4K61S4 are in high impedance state.
@@ -592,6 +591,7 @@ void main(void){
                 if (wwKey == 0xF0) {                            // is it Code+Erase key combo?
                     if (column == 1) {                          // carrier must be at left margin to change modes
                         typewriter = !typewriter;               // toggle the typewriter/keyboard flag
+                        ww_spin();                              // spin the printwheel
                         ww_paper_up();                          // up 1/2 line, then
                         ww_paper_down();                        // down 1/2 line as a visual indication
                     }

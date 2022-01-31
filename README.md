@@ -9,5 +9,5 @@ The object file (in Intel HEX format) is also provided for those who don't have 
 <p align="center"><img src="/images/Wheelwriter Interface.JPEG"/>
 <p align="center"><img src="/images/Schematic-1.png"/>
 <p align="center">Wheelwriter Interface Schematic</p><br>
-<p align="center"><img src="/images/IAP15W4K61S4_Connection.png"/>
+<p align="center"><img src="/images/IAP15W4K61S4 Connection.jpg"/>
 <p align="center">IAP15W4K61S4 Connection</p><br>

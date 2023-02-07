@@ -16,6 +16,8 @@
 // Version 1.3.0 - reworked main() and ww_decode_key() functions
 // Version 1.3.1 - removed wheelwriter model code
 //  
+// NOTE: When using STCmicro's stc-isp application to download object code to the MCU, 
+//       make sure the internal clock frequency is set to 12 MHz.
 //------------------------------------------------------------------------------------------
 
 #include <stdio.h>

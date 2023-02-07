@@ -152,9 +152,9 @@ void timer0_isr(void) interrupt 1 using 1{
 }
 
 //------------------------------------------------------------------------------------------
-// The Wheelwriter prints the character and updates column.
-// Carriage return cancels bold and underlining and resets column back to 1.
-// Linefeeds automatically printed with carriage return if autoLineFeed is TRUE.
+// The Wheelwriter prints the character and updates the variable 'column'.
+// Carriage return cancels bold and underlining and resets 'column' back to 1.
+// Linefeeds automatically printed with carriage return if flag 'autoLineFeed' is TRUE.
 // The character printed by the Wheelwriter is echoed to the serial port (for monitoring).
 //
 // Control characters:

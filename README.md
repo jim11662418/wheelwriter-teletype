@@ -12,3 +12,4 @@ NOTE: When using [STCmicro's STC-ISP](https://www.stcmicro.com/rjxz.html) applic
 <p align="center"><img src="/images/Wheelwriter Interface.JPEG"/>
 <p align="center"><img src="/images/Schematic-1.png"/>
 <p align="center"><img src="/images/IAP15W4K61S4 Connection.png/">
+<p align="center"><img src="/images/STC-ISP.png/">

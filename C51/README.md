@@ -1,1 +1,1 @@
-Files in this folder are compiled with th eKeil C51 compiler.
+Files in this folder are compiled with the Keil C51 compiler.

@@ -15,4 +15,4 @@ The ribbon cable that normally connects the Wheelwriter's Function and Printer b
  
 NOTE: When using [STCmicro's STC-ISP](https://www.stcmicro.com/rjxz.html) application to download object code to the MCU, be sure to specify 12 MHz internal oscillatior frequency. 
 
-If using Grigori Goronzy's [STCGAL](https://github.com/grigorig/stcgal) to download object code, include '-t 12000' on the command line when invoking the application. 
+If using Grigori Goronzy's [STCGAL](https://github.com/grigorig/stcgal) to download object code, include '-t 12000' on the command line when invoking the application to trim the internal oscillator to 12MHz. 

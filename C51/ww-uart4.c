@@ -13,7 +13,7 @@
 
 #define FALSE 0
 #define TRUE  1
-   
+
 #define RBUFSIZE4 16                            // must be 128, 64, 32, 16 or 4 bytes
 #if RBUFSIZE4 < 4
     #error RBUFSIZE4 may not be less than 4.
@@ -46,13 +46,13 @@ void uart4_isr(void) interrupt 18 using 3 {
        wwBusData = S4BUF;                       // retrieve the lower 8 bits
        if (S4RB8) wwBusData |= 0x0100;          // ninth bit is in S3RB8
        rx4_buf[rx4_head++ & (RBUFSIZE4-1)] = wwBusData;  // save it in the buffer
-    }   
+    }
 }
 
 // ---------------------------------------------------------------------------
 //  Initialize UART4 for mode 3. Mode 3 is an asynchronous mode that transmits and receives
-//  a total of 11 bits: 1 start bit, 9 data bits, and 1 stop bit. The ninth bit to be 
-//  transmitted is determined by the value in S4TB8 (S4CON.3). When the ninth bit is received, 
+//  a total of 11 bits: 1 start bit, 9 data bits, and 1 stop bit. The ninth bit to be
+//  transmitted is determined by the value in S4TB8 (S4CON.3). When the ninth bit is received,
 //  it is stored in S4RB8 (S4CON.2). The baud rate is determined by the T4 overflow rate.
 //  The formula for calculating the UART4 baud rate is: baud rate = (T4 overflow)/4.
 //  If T4 is operating in 1T mode (T4x12=1), the baud rate of UART4 = SYSclk/(65536-[T4H,T4L])/4.
@@ -61,9 +61,9 @@ void uart4_isr(void) interrupt 18 using 3 {
 void uart4_init(void) {
     rx4_head = 0;                               // initialize UART4 buffer head/tail pointers.
     rx4_tail = 0;
-    
+
     SET_S4ST4;                                  // set S4ST4 to select Timer 4 as baud rate generator for UART3.
-    CLR_T4_CT;                                  // clear T2_C/T to make Timer 2 operate as timer instead of counter 
+    CLR_T4_CT;                                  // clear T2_C/T to make Timer 2 operate as timer instead of counter
     SET_T4x12;                                  // set T2x12=1 to make Timer 2 operate in 1T mode.
     T4L = 0XF0;                                 // the baud rate of UART3 = 12MHz/(65536-65520)/4 = 187500 bps
     T4H = 0XFF;
@@ -72,7 +72,7 @@ void uart4_init(void) {
     SET_S4SM0;                                  // set S4SM0 for mode 3
     SET_S4REN;                                  // set S4REN to enable reception
     SET_S4TI;                                   // set S4TI to enable transmit
-    CLR_S4RI;                                   // clear S4RI 
+    CLR_S4RI;                                   // clear S4RI
     SET_ES4;                                    // set ES4 to enable UART4 serial interrupt
     EA = TRUE;                                  // enable global interrupt
 }
@@ -83,7 +83,7 @@ void uart4_init(void) {
 // ---------------------------------------------------------------------------
 void send_to_printer_board_wait(unsigned int wwCommand) {
    while (!tx4_ready);                          // wait until transmit buffer is empty
-   tx4_ready = 0;                               // clear flag   
+   tx4_ready = 0;                               // clear flag
    while(!WWbus4);                              // wait until the Wheelwriter bus goes high
    CLR_S4REN;                                   // clear S4REN to disable reception
    if (wwCommand & 0x100) SET_S4TB8; else CLR_S4TB8; // 9th bit
@@ -101,7 +101,7 @@ void send_to_printer_board_wait(unsigned int wwCommand) {
 // ---------------------------------------------------------------------------
 void send_to_printer_board(unsigned int wwCommand) {
    while (!tx4_ready);                          // wait until transmit buffer is empty
-   tx4_ready = 0;                               // clear flag   
+   tx4_ready = 0;                               // clear flag
    while(!WWbus4);                              // wait until the Wheelwriter bus goes high
    CLR_S4REN;                                   // clear S4REN to disable reception
    if (wwCommand & 0x100) SET_S4TB8; else CLR_S4TB8; // 9th bit

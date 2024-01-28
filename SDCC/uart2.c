@@ -4,7 +4,7 @@
 //
 // UART2 uses a receive buffer in internal MOVX SRAM.                     //
 // UART2 uses the Timer 2 for baud rate generation. init_uart2 must be    //
-// called before using functions. No syntax error handling.               //  
+// called before using functions. No syntax error handling.               //
 // RxD2 on pin 9, TxD2 on pin 10, RTS on pin 11, CTS on pin 12            //
 //************************************************************************//
 
@@ -13,9 +13,7 @@
 
 #define FALSE 0
 #define TRUE  1
-
 #define FOSC 12000000L                             // 12 MHz system clock frequency
-
 #define RBUFSIZE2 128                              // must be 256,128,64 or 32 bytes
 
 #if RBUFSIZE2 < 32
@@ -48,7 +46,7 @@ void uart2_isr(void) __interrupt(8) __using(3) {
       CLR_S2TI;                                    // clear transmit interrupt flag
       tx2_ready = TRUE;                            // transmit buffer is ready for a new character
     }
-    
+
     // UART2 receive interrupt
     if(S2RI) {                                     // is this a receive interrupt?
        CLR_S2RI;                                   // clear receive interrupt flag
@@ -59,7 +57,7 @@ void uart2_isr(void) __interrupt(8) __using(3) {
                RTS = 1;                            // pause communications when space in UART2 buffer decreases to less than 64 bytes
             }
       }
-    }   
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -68,23 +66,22 @@ void uart2_isr(void) __interrupt(8) __using(3) {
 void uart2_init(unsigned long baudrate) {
     rx2_head = 0;                                  // initialize UART3 buffer head/tail pointers.
     rx2_tail = 0;
-    rx2_remaining = RBUFSIZE2;                  
+    rx2_remaining = RBUFSIZE2;
 
-    S2CON = 0x50;                                  // UART2 for mode 1
-
-    CLR_T2_CT;                                     // clear T2_C/T to make Timer 2 operate as timer instead of counter 
+    CLR_T2_CT;                                     // clear T2_C/T to make Timer 2 operate as timer instead of counter
     SET_T2x12;                                     // set T2x12=1 to make Timer 2 operate in 1T mode.
     T2L = (65536-(FOSC/4/baudrate));               // low byte of preload
     T2H = (65536-(FOSC/4/baudrate))>>8;            // high byte of preload
     SET_T2R;                                       // set T2R to enable Timer 2 to run
+    S2CON = 0x50;                                  // UART2 for mode 1
 
     SET_S2REN;                                     // set S2REN to enable reception
     SET_S2TI;                                      // set S2TI to enable transmit
-    CLR_S2RI;                                      // clear S2RI 
+    CLR_S2RI;                                      // clear S2RI
     RTS = 0;                                       // clear RTS to allow transmissions from remote console
     SET_ES2;                                       // set ES2 to enable UART2 serial interrupt
     EA = TRUE;                                     // enable global interrupt
-}                   
+}
 
 // ---------------------------------------------------------------------------
 // returns 1 if there is a character waiting in the UART2 receive buffer
@@ -104,9 +101,9 @@ char getchar2(void) {
     buf = rx2_buf[rx2_tail++ &(RBUFSIZE2-1)];
    ++rx2_remaining;                                // space remaining in buffer increases
    if (RTS) {                                      // if communications is now paused...
-         if (rx2_remaining > RESUMELEVEL) {        
+         if (rx2_remaining > RESUMELEVEL) {
             RTS = 0;                               // clear RTS to resume communications when space remaining in buffer increases above 128 bytes
-         }  
+         }
    }
     return(buf);
 }

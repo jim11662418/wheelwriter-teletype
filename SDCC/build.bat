@@ -24,3 +24,5 @@ del *.mem
 del *.rel
 del *.rst
 del *.sym
+
+pause
